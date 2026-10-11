@@ -267,7 +267,7 @@ jobs:
   publish-release:
     name: Publish GitHub Release
     needs: [build-linux, build-windows, build-macos]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Download all built artifacts
@@ -279,16 +279,12 @@ jobs:
       - name: List downloaded files
         run: ls -la release-artifacts
 
-      - name: Create GitHub Release
+      - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            release-artifacts/Aurora-Studio-x86_64.AppImage
-            release-artifacts/Aurora-Studio-linux-x86_64.tar.gz
-            release-artifacts/Aurora-Studio-Setup-x64.exe
-            release-artifacts/Aurora-Studio-windows-x64-portable.zip
-            release-artifacts/Aurora-Studio-macOS.dmg
-            release-artifacts/Aurora-Studio-macOS.zip
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('Aurora Studio {0}', github.ref_name) || 'Aurora Studio (Continuous Build)' }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          files: release-artifacts/*
           generate_release_notes: true
           draft: false
-          prerelease: false
