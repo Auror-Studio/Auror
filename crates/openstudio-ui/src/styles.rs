@@ -239,6 +239,24 @@ button.window-toggle-btn.active {
     padding: 4px;
 }
 
+.piano-roll-toolbar {
+    background-color: #1f232a;
+    border-bottom: 1px solid #2d3440;
+    padding: 4px 8px;
+    border-radius: 3px;
+    margin-bottom: 4px;
+}
+
+.piano-roll-dropdown {
+    background-color: #2b313b;
+    color: #e2e8f0;
+    border: 1px solid #3d4654;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+}
+
 /* Mixer Container */
 .mixer-container {
     background-color: #1e2228;

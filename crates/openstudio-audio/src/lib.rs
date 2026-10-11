@@ -129,6 +129,15 @@ impl AudioEngine {
                     }
                 }
             }
+            UiToAudioMsg::UpdatePianoRollNotes {
+                pattern_id,
+                channel_id,
+                notes,
+            } => {
+                if let Some(pattern) = self.project.patterns.iter_mut().find(|p| p.id == pattern_id) {
+                    pattern.piano_roll_notes.insert(channel_id, notes);
+                }
+            }
             UiToAudioMsg::SetChannelParam {
                 channel_id,
                 param_type,
@@ -206,6 +215,7 @@ impl AudioEngine {
                 while self.tick_accumulator >= 1.0 {
                     self.tick_accumulator -= 1.0;
                     self.current_tick += 1;
+                    self.trigger_piano_roll_notes_at_tick(self.current_tick);
                 }
 
                 // Cálculo do step atual no Pattern mode (16 passos de 24 ticks cada)
@@ -228,9 +238,10 @@ impl AudioEngine {
             let ch1_vol = self.project.channels.get(1).map(|c| c.volume).unwrap_or(0.85);
             let ch2_vol = self.project.channels.get(2).map(|c| c.volume).unwrap_or(0.85);
             let ch3_vol = self.project.channels.get(3).map(|c| c.volume).unwrap_or(0.85);
+            let ch4_vol = self.project.channels.get(4).map(|c| c.volume).unwrap_or(0.85);
 
-            let mixed_l = k_l * ch0_vol + c_l * ch1_vol + h_l * ch2_vol + s_l * ch3_vol + p_l;
-            let mixed_r = k_r * ch0_vol + c_r * ch1_vol + h_r * ch2_vol + s_r * ch3_vol + p_r;
+            let mixed_l = k_l * ch0_vol + c_l * ch1_vol + h_l * ch2_vol + s_l * ch3_vol + p_l * ch4_vol;
+            let mixed_r = k_r * ch0_vol + c_r * ch1_vol + h_r * ch2_vol + s_r * ch3_vol + p_r * ch4_vol;
 
             // Aplica plugins do Master (Soundgoodizer + Delay + EQ2)
             let (sg_l, sg_r) = self.soundgoodizer.process_stereo(mixed_l, mixed_r);
@@ -278,6 +289,37 @@ impl AudioEngine {
                             2 => self.hat.trigger(vel),
                             3 => self.snare.trigger(vel),
                             _ => self.poly_synth.note_on(60),
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn trigger_piano_roll_notes_at_tick(&mut self, tick: u64) {
+        let pat_id = self.project.active_pattern;
+        if let Some(pattern) = self.project.patterns.iter().find(|p| p.id == pat_id) {
+            let pat_len_ticks = (pattern.length_steps as u64) * TICKS_PER_STEP;
+            let rel_tick = if pat_len_ticks > 0 { tick % pat_len_ticks } else { tick };
+
+            for (ch_id, notes) in &pattern.piano_roll_notes {
+                for note in notes {
+                    if note.muted {
+                        continue;
+                    }
+                    if note.start_tick == rel_tick {
+                        let vel = note.velocity;
+                        match *ch_id {
+                            0 => self.kick.trigger(vel),
+                            1 => self.clap.trigger(vel),
+                            2 => self.hat.trigger(vel),
+                            3 => self.snare.trigger(vel),
+                            _ => self.poly_synth.note_on(note.pitch),
+                        }
+                    }
+                    if (note.start_tick + note.duration_ticks) == rel_tick {
+                        if *ch_id >= 4 {
+                            self.poly_synth.note_off(note.pitch);
                         }
                     }
                 }

@@ -260,20 +260,94 @@ pub struct Project {
 impl Default for Project {
     fn default() -> Self {
         let mut patterns = Vec::new();
-        patterns.push(Pattern::new(0, "Pattern 1".to_string(), 16));
+        let mut pat1 = Pattern::new(0, "Pattern 1".to_string(), 16);
 
-        // Cria canais clássicos iniciais do FL Studio: Kick, Clap, Hat, Snare
-        let default_channel_names = ["Kick", "Clap", "Hat", "Snare"];
-        let default_colors = [0xff6b6b, 0x48dbfb, 0xfeca57, 0x1dd1a1];
+        // Cria canais clássicos iniciais do FL Studio: Kick, Clap, Hat, Snare e 3x Osc Synth
+        let default_channel_names = ["Kick", "Clap", "Hat", "Snare", "3x Osc Synth"];
+        let default_colors = [0xff6b6b, 0x48dbfb, 0xfeca57, 0x1dd1a1, 0xa29bfe];
         let mut channels = Vec::new();
         for (i, name) in default_channel_names.iter().enumerate() {
             let mut ch = Channel::default();
             ch.id = i;
             ch.name = name.to_string();
             ch.color = default_colors[i];
-            ch.target_mixer_track = i + 1; // Inserts 1, 2, 3, 4
+            ch.target_mixer_track = i + 1; // Inserts 1, 2, 3, 4, 5
+            if i == 4 {
+                ch.channel_type = ChannelType::Synth3xOsc;
+            }
             channels.push(ch);
         }
+
+        // Notas iniciais no Piano Roll para o canal 4 (3x Osc Synth) - Acorde C Minor 7th
+        let mut synth_notes = Vec::new();
+        synth_notes.push(Note {
+            id: 1,
+            pitch: 60, // C5
+            velocity: 0.85,
+            start_tick: 0,
+            duration_ticks: 96,
+            pan: 0.0,
+            release: 0.5,
+            color_index: 0,
+            muted: false,
+        });
+        synth_notes.push(Note {
+            id: 2,
+            pitch: 63, // D#5
+            velocity: 0.80,
+            start_tick: 0,
+            duration_ticks: 96,
+            pan: 0.0,
+            release: 0.5,
+            color_index: 0,
+            muted: false,
+        });
+        synth_notes.push(Note {
+            id: 3,
+            pitch: 67, // G5
+            velocity: 0.85,
+            start_tick: 0,
+            duration_ticks: 96,
+            pan: 0.0,
+            release: 0.5,
+            color_index: 0,
+            muted: false,
+        });
+        synth_notes.push(Note {
+            id: 4,
+            pitch: 70, // A#5
+            velocity: 0.75,
+            start_tick: 0,
+            duration_ticks: 96,
+            pan: 0.0,
+            release: 0.5,
+            color_index: 0,
+            muted: false,
+        });
+        pat1.piano_roll_notes.insert(4, synth_notes);
+
+        // Batidas padrão no Step Sequencer
+        let kick_steps = pat1.get_or_create_steps(0, 16);
+        kick_steps[0].active = true;
+        kick_steps[4].active = true;
+        kick_steps[8].active = true;
+        kick_steps[12].active = true;
+
+        let clap_steps = pat1.get_or_create_steps(1, 16);
+        clap_steps[4].active = true;
+        clap_steps[12].active = true;
+
+        let hat_steps = pat1.get_or_create_steps(2, 16);
+        hat_steps[2].active = true;
+        hat_steps[6].active = true;
+        hat_steps[10].active = true;
+        hat_steps[14].active = true;
+
+        let snare_steps = pat1.get_or_create_steps(3, 16);
+        snare_steps[4].active = true;
+        snare_steps[12].active = true;
+
+        patterns.push(pat1);
 
         // Inicializa 126 canais de mixer (0 = Master + 125 Inserts)
         let mut mixer_tracks = Vec::with_capacity(126);
@@ -321,6 +395,11 @@ pub enum UiToAudioMsg {
         step_index: usize,
         active: bool,
         velocity: f32,
+    },
+    UpdatePianoRollNotes {
+        pattern_id: usize,
+        channel_id: usize,
+        notes: Vec<Note>,
     },
     SetChannelParam {
         channel_id: usize,
@@ -379,7 +458,7 @@ mod tests {
     fn test_project_default_structure() {
         let p = Project::default();
         assert_eq!(p.tempo, 130.0);
-        assert_eq!(p.channels.len(), 4);
+        assert_eq!(p.channels.len(), 5);
         assert_eq!(p.mixer_tracks.len(), 126);
         assert_eq!(p.mixer_tracks[0].name, "Master");
         assert_eq!(p.playback_mode, PlaybackMode::Pattern);

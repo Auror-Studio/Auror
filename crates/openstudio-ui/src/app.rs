@@ -195,6 +195,7 @@ fn build_ui(
     let sw_short_f7 = switch_to_view.clone();
     let sw_short_f9 = switch_to_view.clone();
     let browser_box = browser.container.clone();
+    let pr_ghost = piano_roll.clone();
 
     let shortcut_ctx = ShortcutContext {
         is_playing: is_playing.clone(),
@@ -208,7 +209,9 @@ fn build_ui(
             let visible = browser_box.is_visible();
             browser_box.set_visible(!visible);
         }),
-        on_toggle_ghost_notes: Rc::new(move || {}),
+        on_toggle_ghost_notes: Rc::new(move || {
+            pr_ghost.toggle_ghost_notes();
+        }),
     };
 
     install_fl_shortcuts(&window, shortcut_ctx);
@@ -217,6 +220,7 @@ fn build_ui(
     let time_label = transport.time_label.clone();
     let mixer_ref = mixer;
     let channel_rack_ref = channel_rack;
+    let piano_roll_ref = piano_roll.clone();
     let _audio_guard = audio_holder.clone();
 
     glib::timeout_add_local(Duration::from_millis(16), move || {
@@ -230,6 +234,7 @@ fn build_ui(
                     let beat = ((total_steps % 16) / 4) + 1;
                     let step = (total_steps % 4) + 1;
                     time_label.set_text(&format!("{:03}:{:02}:{:02}", bar, beat, step));
+                    piano_roll_ref.update_playhead(tick);
                 }
                 AudioToUiMsg::CurrentStep(step) => {
                     // Animação luminosa do Playhead correndo pelos 16 passos
