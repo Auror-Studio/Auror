@@ -6,7 +6,7 @@ fn main() {
     env_logger::init();
 
     println!("=======================================================");
-    println!(" OpenStudio - DAW de Alta Performance em Rust & GTK4   ");
+    println!(" Aurora Studio - DAW de Alta Performance em Rust & GTK4");
     println!(" Compatível com o fluxo de trabalho do FL Studio       ");
     println!("=======================================================");
 

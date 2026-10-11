@@ -15,7 +15,6 @@ use std::time::Duration;
 
 use crate::browser::BrowserWidget;
 use crate::channel_rack::ChannelRackWidget;
-use crate::gpu_dialog::show_gpu_dialog;
 use crate::mixer::MixerWidget;
 use crate::piano_roll::PianoRollWidget;
 use crate::playlist::PlaylistWidget;
@@ -50,7 +49,7 @@ impl OpenStudioApp {
 
     pub fn run(&self) {
         let app = Application::builder()
-            .application_id("org.openstudio.daw")
+            .application_id("org.aurorastudio.daw")
             .build();
 
         let project_rc = self.project.clone();
@@ -85,7 +84,7 @@ fn load_css() {
 fn build_ui(
     app: &Application,
     project: Rc<RefCell<Project>>,
-    gpu_info: &GpuDeviceInfo,
+    _gpu_info: &GpuDeviceInfo,
     plugin_db: &PluginDatabase,
 ) {
     let initial_project = project.borrow().clone();
@@ -106,7 +105,7 @@ fn build_ui(
 
     let window = ApplicationWindow::builder()
         .application(app)
-        .title("OpenStudio - [Novo Projeto.ostudio]")
+        .title("Aurora Studio - [Novo Projeto.ostudio]")
         .default_width(1280)
         .default_height(820)
         .build();
@@ -119,7 +118,7 @@ fn build_ui(
     let is_playing = Rc::new(RefCell::new(false));
     let playback_mode = Rc::new(RefCell::new(PlaybackMode::Pattern));
     let initial_bpm = project.borrow().tempo;
-    let transport = TransportBar::new(tx.clone(), gpu_info, initial_bpm, playback_mode.clone());
+    let transport = TransportBar::new(tx.clone(), initial_bpm, playback_mode.clone());
     root_v_box.append(&transport.container);
 
     // 3. Área Central de Trabalho (Navegador na Esquerda + Stack Modular estilo FL Studio)
@@ -212,13 +211,6 @@ fn build_ui(
         pr_jump_inst.set_active_channel(ch_id);
         sw_pr_jump("piano_roll");
     }));
-
-    // Botão de GPU abre diálogo de aceleração de hardware
-    let win_gpu = window.clone();
-    let gpu_clone = gpu_info.clone();
-    transport.gpu_btn.connect_clicked(move |_| {
-        show_gpu_dialog(&win_gpu, &gpu_clone);
-    });
 
     // 5. Instalação dos Atalhos Globais 100% FL Studio
     let sw_short_f5 = switch_to_view.clone();

@@ -1,13 +1,13 @@
-# 🎛️ OpenStudio (FL Studio in Rust)
+# 🎛️ Aurora Studio (FL Studio in Rust)
 
-> **OpenStudio** é uma DAW (Digital Audio Workstation) moderna de código aberto inspirada no fluxo de trabalho e design do **FL Studio**, desenvolvida em **Rust** de alto desempenho com interface gráfica **GTK4** e aceleração por hardware/GPU.
+> **Aurora Studio** é uma DAW (Digital Audio Workstation) moderna de código aberto inspirada no fluxo de trabalho e design do **FL Studio**, desenvolvida em **Rust** de alto desempenho com interface gráfica **GTK4**.
 
 ---
 
 ## 🚀 Destaques e Funcionalidades
 
 - **Layout e UX fiéis ao FL Studio**:
-  - **Barra de Transporte**: Modos `PAT` e `SONG`, display digital de BPM em tempo real, contador de compassos (`001:01:00`), botões de reprodução, parada e gravação (`● Rec`), status de aceleração de hardware (NVIDIA, AMD Radeon, Intel).
+  - **Barra de Transporte**: Modos `PAT` e `SONG`, display digital de BPM em tempo real, contador de compassos (`001:01:00`), botões de reprodução, parada e gravação (`● Rec`), além de alternadores rápidos de visão (`F5` a `F9`).
   - **Channel Rack (F6)**: Step sequencer clássico de 16 passos por compasso, iluminação rítmica 4/4, controles individuais de volume, pan, mute e envio para canais do Mixer.
   - **Piano Roll em Tempo Real (F7)**: Teclado de piano clicável e interativo, grade melódica multioitava, suporte a notas fantasma (*Ghost Notes* - `Alt + V`), desenho de notas com botão esquerdo e remoção instantânea com botão direito.
   - **Playlist / Arranjo (F5)**: Linha do tempo multitrack horizontal, posicionamento de clips de padrões, régua de compassos e scrubber de reprodução.
@@ -20,8 +20,6 @@
   - **Rack de Efeitos de Estúdio**: *Fruity Delay* com tempo e feedback calibrados, *Parametric EQ 2* de 7 bandas com filtros biquad de pico/shelf, e compressor multibanda *Soundgoodizer*.
   - **Corte de Pânico (Instant Panic Silence)**: Ao pausar ou parar (`Stop`), todos os osciladores, envelopes e buffers de delay são instantaneamente resetados, eliminando notas travadas (*stuck notes*).
   - **Gravação em Tempo Real**: Pressionar `● Rec` (ou `R`) grava notas acionadas diretamente nos padrões ativos.
-- **Detecção de GPU (`openstudio-gpu`)**:
-  - Identifica automaticamente chips gráficos NVIDIA CUDA, AMD Radeon ROCm/Vulkan, Intel Iris/Arc e Apple Silicon, otimizando os buffers gráficos GTK4 e shaders Cairo.
 
 ---
 
@@ -85,7 +83,7 @@ cargo test --workspace
 
 ## ⌨️ Tabela de Atalhos do FL Studio
 
-O OpenStudio foi desenhado para manter o fluxo muscular idêntico ao do FL Studio:
+O Aurora Studio foi desenhado para manter o fluxo muscular idêntico ao do FL Studio:
 
 | Tecla / Atalho | Ação |
 | :--- | :--- |

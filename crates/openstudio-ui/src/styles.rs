@@ -1,5 +1,5 @@
 pub const FL_STUDIO_CSS: &str = r#"
-/* OpenStudio - Tema Escuro Fiel ao FL Studio 21/24 */
+/* Aurora Studio - Tema Escuro Fiel ao FL Studio 21/24 */
 
 window.main-window {
     background-color: #17191d;

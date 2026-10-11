@@ -1,7 +1,6 @@
 use gtk4::prelude::*;
 use gtk4::{Box, Button, Label, Orientation, ToggleButton};
 use openstudio_core::{PlaybackMode, UiToAudioMsg};
-use openstudio_gpu::GpuDeviceInfo;
 use crossbeam_channel::Sender;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -16,19 +15,15 @@ pub struct TransportBar {
     pub pat_mode_btn: Button,
     pub bpm_label: Label,
     pub time_label: Label,
-    pub cpu_label: Label,
-    pub voices_label: Label,
     pub f5_btn: ToggleButton,
     pub f6_btn: ToggleButton,
     pub f7_btn: ToggleButton,
     pub f9_btn: ToggleButton,
-    pub gpu_btn: Button,
 }
 
 impl TransportBar {
     pub fn new(
         tx: Sender<UiToAudioMsg>,
-        gpu_info: &GpuDeviceInfo,
         initial_bpm: f32,
         mode_state: Rc<RefCell<PlaybackMode>>,
     ) -> Self {
@@ -168,27 +163,12 @@ impl TransportBar {
         container.append(&bpm_display);
         container.append(&time_display);
 
-        // 4. Medidores de Performance (CPU e Polifonia)
-        let perf_box = Box::new(Orientation::Horizontal, 6);
-        perf_box.add_css_class("lcd-display");
-        let cpu_label = Label::new(Some("CPU: 3%"));
-        let voices_label = Label::new(Some("Vozes: 0"));
-        perf_box.append(&cpu_label);
-        perf_box.append(&voices_label);
-        container.append(&perf_box);
-
-        // Espaçador expansível
+        // Espaçador expansível (empurra as janelas para a direita estilo FL Studio)
         let spacer = Box::new(Orientation::Horizontal, 0);
         spacer.set_hexpand(true);
         container.append(&spacer);
 
-        // 5. Badge de GPU Acelerada
-        let gpu_label = format!("⚡ GPU: {} ({})", gpu_info.vendor.brand_tag().to_uppercase(), gpu_info.driver_info);
-        let gpu_btn = Button::with_label(&gpu_label);
-        gpu_btn.add_css_class("gpu-badge");
-        container.append(&gpu_btn);
-
-        // 6. Botões de Alternância de Janelas (Atalhos F5..F9)
+        // 4. Botões de Alternância de Janelas (Atalhos F5..F9)
         let win_box = Box::new(Orientation::Horizontal, 4);
         let f5_btn = ToggleButton::with_label("Playlist [F5]");
         f5_btn.add_css_class("window-toggle-btn");
@@ -218,13 +198,10 @@ impl TransportBar {
             pat_mode_btn,
             bpm_label,
             time_label,
-            cpu_label,
-            voices_label,
             f5_btn,
             f6_btn,
             f7_btn,
             f9_btn,
-            gpu_btn,
         }
     }
 
