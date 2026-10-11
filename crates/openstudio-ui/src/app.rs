@@ -49,6 +49,10 @@ impl OpenStudioApp {
     }
 
     pub fn run(&self) {
+        glib::set_prgname(Some("aurora-studio"));
+        glib::set_application_name("Aurora Studio");
+        ensure_desktop_icon_installed();
+
         let app = Application::builder()
             .application_id("org.aurorastudio.daw")
             .build();
@@ -59,6 +63,17 @@ impl OpenStudioApp {
 
         app.connect_startup(|_| {
             load_css();
+            if let Some(display) = Display::default() {
+                let theme = gtk4::IconTheme::for_display(&display);
+                theme.add_search_path("assets");
+                theme.add_search_path("../assets");
+                if let Ok(exe) = std::env::current_exe() {
+                    if let Some(dir) = exe.parent() {
+                        theme.add_search_path(dir);
+                        theme.add_search_path(dir.join("assets"));
+                    }
+                }
+            }
         });
 
         app.connect_activate(move |app| {
@@ -66,6 +81,28 @@ impl OpenStudioApp {
         });
 
         app.run();
+    }
+}
+
+fn ensure_desktop_icon_installed() {
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = std::path::PathBuf::from(home);
+        let icons_scalable = home.join(".local/share/icons/hicolor/scalable/apps");
+        let icons_256 = home.join(".local/share/icons/hicolor/256x256/apps");
+        let apps_dir = home.join(".local/share/applications");
+
+        let _ = std::fs::create_dir_all(&icons_scalable);
+        let _ = std::fs::create_dir_all(&icons_256);
+        let _ = std::fs::create_dir_all(&apps_dir);
+
+        let svg_bytes = include_bytes!("../../../assets/aurora-studio.svg");
+        let png_bytes = include_bytes!("../../../assets/aurora-studio.png");
+        let desktop_content = include_str!("../../../assets/aurora-studio.desktop");
+
+        let _ = std::fs::write(icons_scalable.join("aurora-studio.svg"), svg_bytes);
+        let _ = std::fs::write(icons_256.join("aurora-studio.png"), png_bytes);
+        let _ = std::fs::write(apps_dir.join("aurora-studio.desktop"), desktop_content);
+        let _ = std::fs::write(apps_dir.join("org.aurorastudio.daw.desktop"), desktop_content);
     }
 }
 

@@ -15,6 +15,26 @@ window.main-window {
     min-height: 40px;
 }
 
+.brand-box {
+    margin-right: 6px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #181a20;
+    border: 1px solid #2e3440;
+}
+
+.app-logo {
+    border-radius: 3px;
+    margin-right: 2px;
+}
+
+.brand-title {
+    font-weight: 800;
+    font-size: 13px;
+    color: #e2e8f0;
+    letter-spacing: 0.5px;
+}
+
 /* Displays Digitais LCD de Alta Resolução */
 .lcd-display {
     background-color: #0f1114;

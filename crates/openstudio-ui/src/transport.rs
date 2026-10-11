@@ -1,5 +1,5 @@
 use gtk4::prelude::*;
-use gtk4::{Box, Button, Label, Orientation, ToggleButton};
+use gtk4::{Box, Button, Image, Label, Orientation, ToggleButton};
 use openstudio_core::{PlaybackMode, UiToAudioMsg};
 use crossbeam_channel::Sender;
 use std::rc::Rc;
@@ -29,6 +29,25 @@ impl TransportBar {
     ) -> Self {
         let container = Box::new(Orientation::Horizontal, 8);
         container.add_css_class("transport-bar");
+
+        // 0. Logo Oficial do Aurora Studio
+        let brand_box = Box::new(Orientation::Horizontal, 6);
+        brand_box.add_css_class("brand-box");
+
+        let logo_img = if std::path::Path::new("assets/aurora-studio.png").exists() {
+            Image::from_file("assets/aurora-studio.png")
+        } else {
+            Image::from_icon_name("aurora-studio")
+        };
+        logo_img.set_pixel_size(24);
+        logo_img.add_css_class("app-logo");
+        brand_box.append(&logo_img);
+
+        let brand_title = Label::new(Some("Aurora Studio"));
+        brand_title.add_css_class("brand-title");
+        brand_box.append(&brand_title);
+
+        container.append(&brand_box);
 
         // 1. Grupo Song / Pat Mode Switch
         let mode_box = Box::new(Orientation::Horizontal, 0);
