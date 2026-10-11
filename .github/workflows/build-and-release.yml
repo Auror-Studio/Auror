@@ -120,6 +120,8 @@ jobs:
       - name: Setup Rust (x86_64-pc-windows-gnu)
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: stable-x86_64-pc-windows-gnu
+          default: true
           targets: x86_64-pc-windows-gnu
 
       - name: Rust Cache
@@ -127,6 +129,11 @@ jobs:
 
       - name: Build Windows Binary
         shell: msys2 {0}
+        env:
+          PKG_CONFIG_PATH: /mingw64/lib/pkgconfig:/mingw64/share/pkgconfig
+          PKG_CONFIG_ALLOW_CROSS: "1"
+          PKG_CONFIG_ALLOW_CROSS_x86_64_pc_windows_gnu: "1"
+          TARGET_PKG_CONFIG_ALLOW_CROSS: "1"
         run: |
           cargo build --release --bin openstudio --target x86_64-pc-windows-gnu
 
