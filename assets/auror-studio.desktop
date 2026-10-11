@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Auror Studio
+GenericName=Digital Audio Workstation
+Comment=DAW profissional e de alta performance inspirada no FL Studio em Rust e GTK4
+Exec=auror-studio %U
+Icon=auror-studio
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Midi;Sequencer;AudioVideoEditing;
+MimeType=application/x-auror-studio;
+StartupNotify=true
+StartupWMClass=auror-studio
+Keywords=music;audio;daw;flstudio;sequencer;synthesizer;mixer;auror;

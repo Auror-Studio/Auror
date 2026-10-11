@@ -10,7 +10,7 @@ pub fn show_save_project_dialog(parent: &ApplicationWindow, project: Rc<RefCell<
     let dialog = Window::builder()
         .transient_for(parent)
         .modal(true)
-        .title("Salvar Projeto - Aurora Studio")
+        .title("Salvar Projeto - Auror Studio")
         .default_width(450)
         .default_height(200)
         .build();
@@ -61,7 +61,7 @@ pub fn show_save_project_dialog(parent: &ApplicationWindow, project: Rc<RefCell<
         match openstudio_project::save_project_to_file(&p, path) {
             Ok(()) => {
                 status_lbl.set_text("✔ Projeto salvo com sucesso!");
-                parent_win.set_title(Some(&format!("Aurora Studio - [{}]", path_str)));
+                parent_win.set_title(Some(&format!("Auror Studio - [{}]", path_str)));
                 let d = dialog_save.clone();
                 glib::timeout_add_local_once(std::time::Duration::from_millis(700), move || {
                     d.close();
@@ -82,7 +82,7 @@ pub fn show_export_audio_dialog(parent: &ApplicationWindow, project: Rc<RefCell<
     let dialog = Window::builder()
         .transient_for(parent)
         .modal(true)
-        .title("Exportar Áudio WAV - Aurora Studio")
+        .title("Exportar Áudio WAV - Auror Studio")
         .default_width(450)
         .default_height(200)
         .build();
@@ -100,7 +100,7 @@ pub fn show_export_audio_dialog(parent: &ApplicationWindow, project: Rc<RefCell<
     content.append(&title_lbl);
 
     let entry = Entry::new();
-    entry.set_text("Aurora_Export.wav");
+    entry.set_text("Auror_Export.wav");
     entry.set_placeholder_text(Some("Nome do arquivo WAV de saída"));
     content.append(&entry);
 

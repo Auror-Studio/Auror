@@ -1,4 +1,4 @@
-name: Build & Release Aurora Studio
+name: Build & Release Auror Studio
 
 on:
   push:
@@ -54,16 +54,17 @@ jobs:
                    AppDir/usr/share/glib-2.0/schemas
 
           # Binary
+          cp target/release/openstudio AppDir/usr/bin/auror-studio
           cp target/release/openstudio AppDir/usr/bin/aurora-studio
-          chmod +x AppDir/usr/bin/aurora-studio
+          chmod +x AppDir/usr/bin/auror-studio AppDir/usr/bin/aurora-studio
 
           # Desktop & Icons
-          cp assets/aurora-studio.desktop AppDir/
-          cp assets/aurora-studio.desktop AppDir/usr/share/applications/
-          cp assets/aurora-studio.svg AppDir/
-          cp assets/aurora-studio.svg AppDir/usr/share/icons/hicolor/scalable/apps/
-          cp assets/aurora-studio.png AppDir/
-          cp assets/aurora-studio.png AppDir/usr/share/icons/hicolor/256x256/apps/
+          cp assets/auror-studio.desktop AppDir/
+          cp assets/auror-studio.desktop AppDir/usr/share/applications/
+          cp assets/auror-studio.svg AppDir/
+          cp assets/auror-studio.svg AppDir/usr/share/icons/hicolor/scalable/apps/
+          cp assets/auror-studio.png AppDir/
+          cp assets/auror-studio.png AppDir/usr/share/icons/hicolor/256x256/apps/
 
           # AppRun launcher
           cp assets/linux/AppRun AppDir/AppRun
@@ -80,18 +81,18 @@ jobs:
           chmod +x appimagetool
 
           # Generate AppImage
-          ARCH=x86_64 ./appimagetool --appimage-extract-and-run AppDir Aurora-Studio-x86_64.AppImage
+          ARCH=x86_64 ./appimagetool --appimage-extract-and-run AppDir Auror-Studio-x86_64.AppImage
 
           # Generate universal tarball
-          tar -czvf Aurora-Studio-linux-x86_64.tar.gz -C AppDir/usr/bin aurora-studio
+          tar -czvf Auror-Studio-linux-x86_64.tar.gz -C AppDir/usr/bin auror-studio
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-studio-linux
+          name: auror-studio-linux
           path: |
-            Aurora-Studio-x86_64.AppImage
-            Aurora-Studio-linux-x86_64.tar.gz
+            Auror-Studio-x86_64.AppImage
+            Auror-Studio-linux-x86_64.tar.gz
           if-no-files-found: error
 
   # =========================================================================
@@ -141,8 +142,8 @@ jobs:
         shell: msys2 {0}
         run: |
           mkdir -p dist/windows
-          cp target/x86_64-pc-windows-gnu/release/openstudio.exe dist/windows/aurora-studio.exe
-          cp assets/aurora-studio.ico dist/windows/
+          cp target/x86_64-pc-windows-gnu/release/openstudio.exe dist/windows/auror-studio.exe
+          cp assets/auror-studio.ico dist/windows/
 
           # GSettings Schemas
           mkdir -p dist/windows/share/glib-2.0/schemas
@@ -172,7 +173,7 @@ jobs:
       - name: Create Portable Zip
         shell: pwsh
         run: |
-          Compress-Archive -Path dist\windows\* -DestinationPath dist\Aurora-Studio-windows-x64-portable.zip
+          Compress-Archive -Path dist\windows\* -DestinationPath dist\Auror-Studio-windows-x64-portable.zip
 
       - name: Compile Inno Setup (.exe Installer)
         shell: pwsh
@@ -191,10 +192,10 @@ jobs:
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-studio-windows
+          name: auror-studio-windows
           path: |
-            dist/Aurora-Studio-Setup-x64.exe
-            dist/Aurora-Studio-windows-x64-portable.zip
+            dist/Auror-Studio-Setup-x64.exe
+            dist/Auror-Studio-windows-x64-portable.zip
           if-no-files-found: error
 
   # =========================================================================
@@ -223,42 +224,42 @@ jobs:
 
       - name: Package macOS App Bundle and DMG
         run: |
-          APP_DIR="Aurora Studio.app"
+          APP_DIR="Auror Studio.app"
           mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
           # Binary
-          cp target/release/openstudio "$APP_DIR/Contents/MacOS/aurora-studio"
-          chmod +x "$APP_DIR/Contents/MacOS/aurora-studio"
+          cp target/release/openstudio "$APP_DIR/Contents/MacOS/auror-studio"
+          chmod +x "$APP_DIR/Contents/MacOS/auror-studio"
 
           # Info.plist
           cp assets/macos/Info.plist "$APP_DIR/Contents/Info.plist"
 
           # Generate Apple ICNS icon from PNG
           mkdir -p icon.iconset
-          sips -z 16 16     assets/aurora-studio.png --out icon.iconset/icon_16x16.png || true
-          sips -z 32 32     assets/aurora-studio.png --out icon.iconset/icon_16x16@2x.png || true
-          sips -z 32 32     assets/aurora-studio.png --out icon.iconset/icon_32x32.png || true
-          sips -z 64 64     assets/aurora-studio.png --out icon.iconset/icon_32x32@2x.png || true
-          sips -z 128 128   assets/aurora-studio.png --out icon.iconset/icon_128x128.png || true
-          sips -z 256 256   assets/aurora-studio.png --out icon.iconset/icon_128x128@2x.png || true
-          sips -z 256 256   assets/aurora-studio.png --out icon.iconset/icon_256x256.png || true
-          sips -z 512 512   assets/aurora-studio.png --out icon.iconset/icon_256x256@2x.png || true
-          sips -z 512 512   assets/aurora-studio.png --out icon.iconset/icon_512x512.png || true
-          iconutil -c icns icon.iconset -o "$APP_DIR/Contents/Resources/aurora-studio.icns" || cp assets/aurora-studio.png "$APP_DIR/Contents/Resources/"
+          sips -z 16 16     assets/auror-studio.png --out icon.iconset/icon_16x16.png || true
+          sips -z 32 32     assets/auror-studio.png --out icon.iconset/icon_16x16@2x.png || true
+          sips -z 32 32     assets/auror-studio.png --out icon.iconset/icon_32x32.png || true
+          sips -z 64 64     assets/auror-studio.png --out icon.iconset/icon_32x32@2x.png || true
+          sips -z 128 128   assets/auror-studio.png --out icon.iconset/icon_128x128.png || true
+          sips -z 256 256   assets/auror-studio.png --out icon.iconset/icon_128x128@2x.png || true
+          sips -z 256 256   assets/auror-studio.png --out icon.iconset/icon_256x256.png || true
+          sips -z 512 512   assets/auror-studio.png --out icon.iconset/icon_256x256@2x.png || true
+          sips -z 512 512   assets/auror-studio.png --out icon.iconset/icon_512x512.png || true
+          iconutil -c icns icon.iconset -o "$APP_DIR/Contents/Resources/auror-studio.icns" || cp assets/auror-studio.png "$APP_DIR/Contents/Resources/"
 
           # Create DMG
-          hdiutil create -volname "Aurora Studio" -srcfolder "$APP_DIR" -ov -format UDZO "Aurora-Studio-macOS.dmg"
+          hdiutil create -volname "Auror Studio" -srcfolder "$APP_DIR" -ov -format UDZO "Auror-Studio-macOS.dmg"
 
           # Create Zip
-          zip -r -y "Aurora-Studio-macOS.zip" "$APP_DIR"
+          zip -r -y "Auror-Studio-macOS.zip" "$APP_DIR"
 
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-studio-macos
+          name: auror-studio-macos
           path: |
-            Aurora-Studio-macOS.dmg
-            Aurora-Studio-macOS.zip
+            Auror-Studio-macOS.dmg
+            Auror-Studio-macOS.zip
           if-no-files-found: error
 
   # =========================================================================
@@ -283,7 +284,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'latest' }}
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('Aurora Studio {0}', github.ref_name) || 'Aurora Studio (Continuous Build)' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && format('Auror Studio {0}', github.ref_name) || 'Auror Studio (Continuous Build)' }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
           files: release-artifacts/*
           generate_release_notes: true

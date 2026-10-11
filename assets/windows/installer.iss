@@ -1,9 +1,9 @@
-; Script Inno Setup para Aurora Studio (FL Studio in Rust)
-#define MyAppName "Aurora Studio"
+; Script Inno Setup para Auror Studio (FL Studio in Rust)
+#define MyAppName "Auror Studio"
 #define MyAppVersion "0.1.0"
-#define MyAppPublisher "Aurora Studio Team"
-#define MyAppURL "https://github.com/ericNKS/Aurora-Studio"
-#define MyAppExeName "aurora-studio.exe"
+#define MyAppPublisher "Auror Studio Team"
+#define MyAppURL "https://github.com/Auror-Studio/Auror"
+#define MyAppExeName "auror-studio.exe"
 
 [Setup]
 AppId={{E6F7D8A9-4B5C-4E1F-8A2D-7B9C1E3F5A8B}
@@ -17,8 +17,8 @@ DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\..\dist
-OutputBaseFilename=Aurora-Studio-Setup-x64
-SetupIconFile=..\aurora-studio.ico
+OutputBaseFilename=Auror-Studio-Setup-x64
+SetupIconFile=..\auror-studio.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -36,9 +36,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "..\..\dist\windows\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\aurora-studio.ico"
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\auror-studio.ico"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\aurora-studio.ico"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\auror-studio.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

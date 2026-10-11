@@ -1,6 +1,6 @@
-# 🎛️ Aurora Studio (FL Studio in Rust)
+# 🎛️ Auror Studio (FL Studio in Rust)
 
-> **Aurora Studio** é uma DAW (Digital Audio Workstation) moderna de código aberto inspirada no fluxo de trabalho e design do **FL Studio**, desenvolvida em **Rust** de alto desempenho com interface gráfica **GTK4**.
+> **Auror Studio** é uma DAW (Digital Audio Workstation) moderna de código aberto inspirada no fluxo de trabalho e design do **FL Studio**, desenvolvida em **Rust** de alto desempenho com interface gráfica **GTK4**.
 
 ---
 
@@ -83,7 +83,7 @@ cargo test --workspace
 
 ## ⌨️ Tabela de Atalhos do FL Studio
 
-O Aurora Studio foi desenhado para manter o fluxo muscular idêntico ao do FL Studio:
+O Auror Studio foi desenhado para manter o fluxo muscular idêntico ao do FL Studio:
 
 | Tecla / Atalho | Ação |
 | :--- | :--- |
@@ -130,7 +130,7 @@ O repositório conta com um pipeline completo no **GitHub Actions** (`.github/wo
 | :--- | :--- | :--- |
 | 🐧 **Linux** | `.AppImage` / `.tar.gz` | Executável portátil universal (x86_64), pronto para rodar em qualquer distribuição (Ubuntu, Arch, Fedora, Debian). |
 | 🪟 **Windows** | `.exe` (Instalador) / `.zip` | Instalador assistido oficial Inno Setup com atalhos e desinstalador, além de versão portátil empacotada com todas as DLLs e schemas GTK4. |
-| 🍎 **macOS** | `.dmg` / `.zip` | Imagem de disco Apple Disk Image (`.dmg`) e pacote de aplicativo nativo `Aurora Studio.app` com ícone de alta resolução Retina. |
+| 🍎 **macOS** | `.dmg` / `.zip` | Imagem de disco Apple Disk Image (`.dmg`) e pacote de aplicativo nativo `Auror Studio.app` com ícone de alta resolução Retina. |
 
 ### Como gerar um novo Release com os executáveis:
 1. Crie uma tag de versão no git e envie para o GitHub:

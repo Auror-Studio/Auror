@@ -15,4 +15,8 @@ if [ -d "${APPDIR}/usr/share/glib-2.0/schemas" ]; then
 fi
 
 # Executable launch
-exec "${APPDIR}/usr/bin/aurora-studio" "$@"
+if [ -f "${APPDIR}/usr/bin/auror-studio" ]; then
+    exec "${APPDIR}/usr/bin/auror-studio" "$@"
+else
+    exec "${APPDIR}/usr/bin/aurora-studio" "$@"
+fi

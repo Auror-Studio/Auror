@@ -49,12 +49,12 @@ impl OpenStudioApp {
     }
 
     pub fn run(&self) {
-        glib::set_prgname(Some("aurora-studio"));
-        glib::set_application_name("Aurora Studio");
+        glib::set_prgname(Some("auror-studio"));
+        glib::set_application_name("Auror Studio");
         ensure_desktop_icon_installed();
 
         let app = Application::builder()
-            .application_id("org.aurorastudio.daw")
+            .application_id("org.aurorstudio.daw")
             .build();
 
         let project_rc = self.project.clone();
@@ -95,14 +95,19 @@ fn ensure_desktop_icon_installed() {
         let _ = std::fs::create_dir_all(&icons_256);
         let _ = std::fs::create_dir_all(&apps_dir);
 
-        let svg_bytes = include_bytes!("../../../assets/aurora-studio.svg");
-        let png_bytes = include_bytes!("../../../assets/aurora-studio.png");
-        let desktop_content = include_str!("../../../assets/aurora-studio.desktop");
+        let svg_bytes = include_bytes!("../../../assets/auror-studio.svg");
+        let png_bytes = include_bytes!("../../../assets/auror-studio.png");
+        let desktop_content = include_str!("../../../assets/auror-studio.desktop");
 
+        let _ = std::fs::write(icons_scalable.join("auror-studio.svg"), svg_bytes);
+        let _ = std::fs::write(icons_256.join("auror-studio.png"), png_bytes);
+        let _ = std::fs::write(apps_dir.join("auror-studio.desktop"), desktop_content);
+        let _ = std::fs::write(apps_dir.join("org.aurorstudio.daw.desktop"), desktop_content);
+
+        // Também mantém nomes legados para compatibilidade
         let _ = std::fs::write(icons_scalable.join("aurora-studio.svg"), svg_bytes);
         let _ = std::fs::write(icons_256.join("aurora-studio.png"), png_bytes);
         let _ = std::fs::write(apps_dir.join("aurora-studio.desktop"), desktop_content);
-        let _ = std::fs::write(apps_dir.join("org.aurorastudio.daw.desktop"), desktop_content);
     }
 }
 
@@ -143,7 +148,7 @@ fn build_ui(
 
     let window = ApplicationWindow::builder()
         .application(app)
-        .title("Aurora Studio - [Novo Projeto.ostudio]")
+        .title("Auror Studio - [Novo Projeto.ostudio]")
         .default_width(1280)
         .default_height(820)
         .build();

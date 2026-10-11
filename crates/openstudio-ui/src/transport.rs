@@ -30,20 +30,22 @@ impl TransportBar {
         let container = Box::new(Orientation::Horizontal, 8);
         container.add_css_class("transport-bar");
 
-        // 0. Logo Oficial do Aurora Studio
+        // 0. Logo Oficial do Auror Studio
         let brand_box = Box::new(Orientation::Horizontal, 6);
         brand_box.add_css_class("brand-box");
 
-        let logo_img = if std::path::Path::new("assets/aurora-studio.png").exists() {
+        let logo_img = if std::path::Path::new("assets/auror-studio.png").exists() {
+            Image::from_file("assets/auror-studio.png")
+        } else if std::path::Path::new("assets/aurora-studio.png").exists() {
             Image::from_file("assets/aurora-studio.png")
         } else {
-            Image::from_icon_name("aurora-studio")
+            Image::from_icon_name("auror-studio")
         };
         logo_img.set_pixel_size(24);
         logo_img.add_css_class("app-logo");
         brand_box.append(&logo_img);
 
-        let brand_title = Label::new(Some("Aurora Studio"));
+        let brand_title = Label::new(Some("Auror Studio"));
         brand_title.add_css_class("brand-title");
         brand_box.append(&brand_title);
 
