@@ -1,0 +1,278 @@
+name: Build & Release Aurora Studio
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # =========================================================================
+  # 1. LINUX BUILD (.AppImage & .tar.gz)
+  # =========================================================================
+  build-linux:
+    name: Linux (.AppImage)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            pkg-config \
+            libgtk-4-dev \
+            libasound2-dev \
+            libjack-jackd2-dev \
+            libglib2.0-bin \
+            desktop-file-utils \
+            wget \
+            file
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release --bin openstudio
+
+      - name: Package AppImage and Tarball
+        run: |
+          mkdir -p AppDir/usr/bin \
+                   AppDir/usr/share/applications \
+                   AppDir/usr/share/icons/hicolor/scalable/apps \
+                   AppDir/usr/share/icons/hicolor/256x256/apps \
+                   AppDir/usr/share/glib-2.0/schemas
+
+          # Binary
+          cp target/release/openstudio AppDir/usr/bin/aurora-studio
+          chmod +x AppDir/usr/bin/aurora-studio
+
+          # Desktop & Icons
+          cp assets/aurora-studio.desktop AppDir/
+          cp assets/aurora-studio.desktop AppDir/usr/share/applications/
+          cp assets/aurora-studio.svg AppDir/
+          cp assets/aurora-studio.svg AppDir/usr/share/icons/hicolor/scalable/apps/
+          cp assets/aurora-studio.png AppDir/
+          cp assets/aurora-studio.png AppDir/usr/share/icons/hicolor/256x256/apps/
+
+          # AppRun launcher
+          cp assets/linux/AppRun AppDir/AppRun
+          chmod +x AppDir/AppRun
+
+          # Compile GLib schemas
+          if [ -d "/usr/share/glib-2.0/schemas" ]; then
+            cp -r /usr/share/glib-2.0/schemas/* AppDir/usr/share/glib-2.0/schemas/ || true
+            glib-compile-schemas AppDir/usr/share/glib-2.0/schemas/ || true
+          fi
+
+          # Download appimagetool
+          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage -O appimagetool
+          chmod +x appimagetool
+
+          # Generate AppImage
+          ARCH=x86_64 ./appimagetool --appimage-extract-and-run AppDir Aurora-Studio-x86_64.AppImage
+
+          # Generate universal tarball
+          tar -czvf Aurora-Studio-linux-x86_64.tar.gz -C AppDir/usr/bin aurora-studio
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-studio-linux
+          path: |
+            Aurora-Studio-x86_64.AppImage
+            Aurora-Studio-linux-x86_64.tar.gz
+          if-no-files-found: error
+
+  # =========================================================================
+  # 2. WINDOWS BUILD (.exe Installer & Portable .zip)
+  # =========================================================================
+  build-windows:
+    name: Windows (.exe Installer & Portable)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            git
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-pkg-config
+            mingw-w64-x86_64-gtk4
+            mingw-w64-x86_64-glib2
+            mingw-w64-x86_64-cairo
+            mingw-w64-x86_64-pango
+            mingw-w64-x86_64-gdk-pixbuf2
+            mingw-w64-x86_64-graphene
+            mingw-w64-x86_64-epoxy
+            mingw-w64-x86_64-harfbuzz
+
+      - name: Setup Rust (x86_64-pc-windows-gnu)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Windows Binary
+        shell: msys2 {0}
+        run: |
+          cargo build --release --bin openstudio --target x86_64-pc-windows-gnu
+
+      - name: Bundle Windows Runtime & DLLs
+        shell: msys2 {0}
+        run: |
+          mkdir -p dist/windows
+          cp target/x86_64-pc-windows-gnu/release/openstudio.exe dist/windows/aurora-studio.exe
+          cp assets/aurora-studio.ico dist/windows/
+
+          # GSettings Schemas
+          mkdir -p dist/windows/share/glib-2.0/schemas
+          cp -r /mingw64/share/glib-2.0/schemas/* dist/windows/share/glib-2.0/schemas/ || true
+          glib-compile-schemas dist/windows/share/glib-2.0/schemas/ || true
+
+          # Dependency resolution for GTK4 runtime
+          for dll in $(ldd dist/windows/aurora-studio.exe | grep -i mingw64 | awk '{print $3}'); do
+            cp -n "$dll" dist/windows/ 2>/dev/null || true
+          done
+
+          # Essential libraries
+          for dll in libgtk-4-1.dll libgio-2.0-0.dll libglib-2.0-0.dll libgobject-2.0-0.dll \
+                     libcairo-2.dll libpango-1.0-0.dll libpangocairo-1.0-0.dll libgdk_pixbuf-2.0-0.dll \
+                     libgraphene-1.0-0.dll libepoxy-0.dll libharfbuzz-0.dll libfribidi-0.dll \
+                     libintl-8.dll libiconv-2.dll libpng16-16.dll zlib1.dll libwinpthread-1.dll \
+                     libgcc_s_seh-1.dll libstdc++-6.dll; do
+            if [ -f "/mingw64/bin/$dll" ]; then
+              cp -n "/mingw64/bin/$dll" dist/windows/ 2>/dev/null || true
+            fi
+          done
+
+      - name: Create Portable Zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\windows\* -DestinationPath dist\Aurora-Studio-windows-x64-portable.zip
+
+      - name: Compile Inno Setup (.exe Installer)
+        shell: pwsh
+        run: |
+          & "ISCC.exe" assets\windows\installer.iss
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-studio-windows
+          path: |
+            dist/Aurora-Studio-Setup-x64.exe
+            dist/Aurora-Studio-windows-x64-portable.zip
+          if-no-files-found: error
+
+  # =========================================================================
+  # 3. MACOS BUILD (.dmg & .zip)
+  # =========================================================================
+  build-macos:
+    name: macOS (.dmg & .app)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies via Homebrew
+        run: |
+          brew install gtk4 pkg-config
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release --bin openstudio
+
+      - name: Package macOS App Bundle and DMG
+        run: |
+          APP_DIR="Aurora Studio.app"
+          mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
+
+          # Binary
+          cp target/release/openstudio "$APP_DIR/Contents/MacOS/aurora-studio"
+          chmod +x "$APP_DIR/Contents/MacOS/aurora-studio"
+
+          # Info.plist
+          cp assets/macos/Info.plist "$APP_DIR/Contents/Info.plist"
+
+          # Generate Apple ICNS icon from PNG
+          mkdir -p icon.iconset
+          sips -z 16 16     assets/aurora-studio.png --out icon.iconset/icon_16x16.png || true
+          sips -z 32 32     assets/aurora-studio.png --out icon.iconset/icon_16x16@2x.png || true
+          sips -z 32 32     assets/aurora-studio.png --out icon.iconset/icon_32x32.png || true
+          sips -z 64 64     assets/aurora-studio.png --out icon.iconset/icon_32x32@2x.png || true
+          sips -z 128 128   assets/aurora-studio.png --out icon.iconset/icon_128x128.png || true
+          sips -z 256 256   assets/aurora-studio.png --out icon.iconset/icon_128x128@2x.png || true
+          sips -z 256 256   assets/aurora-studio.png --out icon.iconset/icon_256x256.png || true
+          sips -z 512 512   assets/aurora-studio.png --out icon.iconset/icon_256x256@2x.png || true
+          sips -z 512 512   assets/aurora-studio.png --out icon.iconset/icon_512x512.png || true
+          iconutil -c icns icon.iconset -o "$APP_DIR/Contents/Resources/aurora-studio.icns" || cp assets/aurora-studio.png "$APP_DIR/Contents/Resources/"
+
+          # Create DMG
+          hdiutil create -volname "Aurora Studio" -srcfolder "$APP_DIR" -ov -format UDZO "Aurora-Studio-macOS.dmg"
+
+          # Create Zip
+          zip -r -y "Aurora-Studio-macOS.zip" "$APP_DIR"
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-studio-macos
+          path: |
+            Aurora-Studio-macOS.dmg
+            Aurora-Studio-macOS.zip
+          if-no-files-found: error
+
+  # =========================================================================
+  # 4. GITHUB RELEASES (On Tag Push or Release Dispatch)
+  # =========================================================================
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-linux, build-windows, build-macos]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all built artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: List downloaded files
+        run: ls -la release-artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-artifacts/Aurora-Studio-x86_64.AppImage
+            release-artifacts/Aurora-Studio-linux-x86_64.tar.gz
+            release-artifacts/Aurora-Studio-Setup-x64.exe
+            release-artifacts/Aurora-Studio-windows-x64-portable.zip
+            release-artifacts/Aurora-Studio-macOS.dmg
+            release-artifacts/Aurora-Studio-macOS.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false

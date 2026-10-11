@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Aurora Studio
+GenericName=Digital Audio Workstation
+Comment=DAW profissional e de alta performance inspirada no FL Studio em Rust e GTK4
+Exec=aurora-studio %U
+Icon=aurora-studio
+Terminal=false
+Type=Application
+Categories=AudioVideo;Audio;Midi;Sequencer;AudioVideoEditing;
+MimeType=application/x-aurora-studio;
+StartupNotify=true
+StartupWMClass=aurora-studio
+Keywords=music;audio;daw;flstudio;sequencer;synthesizer;mixer;

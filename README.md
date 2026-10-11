@@ -122,6 +122,27 @@ openstudio/
 
 ---
 
+## 📦 Builds Automáticas e Downloads (CI/CD)
+
+O repositório conta com um pipeline completo no **GitHub Actions** (`.github/workflows/build-and-release.yml`) que compila e empacota automaticamente os executáveis oficiais para todas as plataformas:
+
+| Sistema Operacional | Formato de Distribuição | Descrição |
+| :--- | :--- | :--- |
+| 🐧 **Linux** | `.AppImage` / `.tar.gz` | Executável portátil universal (x86_64), pronto para rodar em qualquer distribuição (Ubuntu, Arch, Fedora, Debian). |
+| 🪟 **Windows** | `.exe` (Instalador) / `.zip` | Instalador assistido oficial Inno Setup com atalhos e desinstalador, além de versão portátil empacotada com todas as DLLs e schemas GTK4. |
+| 🍎 **macOS** | `.dmg` / `.zip` | Imagem de disco Apple Disk Image (`.dmg`) e pacote de aplicativo nativo `Aurora Studio.app` com ícone de alta resolução Retina. |
+
+### Como gerar um novo Release com os executáveis:
+1. Crie uma tag de versão no git e envie para o GitHub:
+   ```bash
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+2. O GitHub Actions iniciará automaticamente o pipeline multiplataforma e publicará o Release em **Releases** com todos os arquivos anexados.
+3. Você também pode acionar a compilação a qualquer momento pela aba **Actions** no GitHub clicando em **Run workflow** (*workflow_dispatch*).
+
+---
+
 ## 🤝 Como Contribuir
 
 Contribuições são muito bem-vindas! Se você deseja ajudar a implementar novos recursos do FL Studio ou novos sintetizadores/efeitos:
@@ -146,3 +167,4 @@ Contribuições são muito bem-vindas! Se você deseja ajudar a implementar novo
 ## 📜 Licença
 
 Distribuído sob a licença MIT ou Apache 2.0. Consulte o arquivo `LICENSE` para obter mais detalhes.
+

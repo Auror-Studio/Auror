@@ -1,5 +1,11 @@
 /target/
+/dist/
+/AppDir/
+appimagetool
+*.AppImage
+*.dmg
 **/*.rs.bk
 *.swp
 *.o
 .DS_Store
+
