@@ -1,0 +1,10 @@
+[package]
+name = "openstudio-dsp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+openstudio-core = { path = "../openstudio-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }

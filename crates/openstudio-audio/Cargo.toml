@@ -1,0 +1,12 @@
+[package]
+name = "openstudio-audio"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+openstudio-core = { path = "../openstudio-core" }
+openstudio-dsp = { path = "../openstudio-dsp" }
+cpal = { workspace = true }
+rtrb = { workspace = true }
+crossbeam-channel = { workspace = true }
+log = { workspace = true }

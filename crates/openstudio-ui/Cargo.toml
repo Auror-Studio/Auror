@@ -1,0 +1,18 @@
+[package]
+name = "openstudio-ui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+openstudio-core = { path = "../openstudio-core" }
+openstudio-gpu = { path = "../openstudio-gpu" }
+openstudio-dsp = { path = "../openstudio-dsp" }
+openstudio-audio = { path = "../openstudio-audio" }
+openstudio-plugins = { path = "../openstudio-plugins" }
+openstudio-project = { path = "../openstudio-project" }
+gtk4 = { workspace = true }
+glib = { workspace = true }
+cairo-rs = { workspace = true }
+pango = { workspace = true }
+crossbeam-channel = { workspace = true }
+log = { workspace = true }

@@ -1,0 +1,336 @@
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use crossbeam_channel::{Receiver, Sender};
+use openstudio_core::{
+    AudioToUiMsg, ChannelParam, MixerParam, Project, TransportState, UiToAudioMsg,
+    TICKS_PER_STEP,
+};
+use openstudio_dsp::{
+    DrumType, DrumVoice, FruityDelay, ParametricEQ2, PolyphonicSynth, Soundgoodizer,
+};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+
+pub struct AudioEngineHandle {
+    pub ui_to_audio_tx: Sender<UiToAudioMsg>,
+    pub audio_to_ui_rx: Receiver<AudioToUiMsg>,
+    pub is_running: Arc<AtomicBool>,
+    pub stream: Option<cpal::Stream>,
+}
+
+impl AudioEngineHandle {
+    pub fn dummy() -> Self {
+        let (tx, _) = crossbeam_channel::unbounded();
+        let (_, rx) = crossbeam_channel::unbounded();
+        Self {
+            ui_to_audio_tx: tx,
+            audio_to_ui_rx: rx,
+            is_running: Arc::new(AtomicBool::new(false)),
+            stream: None,
+        }
+    }
+}
+
+pub struct AudioEngine {
+    project: Project,
+    sample_rate: f32,
+    transport_state: TransportState,
+    current_tick: u64,
+    tick_accumulator: f64,
+    current_step: usize,
+
+    // Geradores dedicados de alta fidelidade
+    kick: DrumVoice,
+    clap: DrumVoice,
+    hat: DrumVoice,
+    snare: DrumVoice,
+    poly_synth: PolyphonicSynth,
+
+    // Efeitos de mixer
+    soundgoodizer: Soundgoodizer,
+    eq2: ParametricEQ2,
+    delay: FruityDelay,
+    frame_counter: usize,
+}
+
+impl AudioEngine {
+    pub fn new(sample_rate: f32, project: Project) -> Self {
+        Self {
+            project,
+            sample_rate,
+            transport_state: TransportState::Stopped,
+            current_tick: 0,
+            tick_accumulator: 0.0,
+            current_step: 0,
+            kick: DrumVoice::new(DrumType::Kick),
+            clap: DrumVoice::new(DrumType::Clap),
+            hat: DrumVoice::new(DrumType::ClosedHat),
+            snare: DrumVoice::new(DrumType::Snare),
+            poly_synth: PolyphonicSynth::default(),
+            soundgoodizer: Soundgoodizer::default(),
+            eq2: ParametricEQ2::default(),
+            delay: FruityDelay::default(),
+            frame_counter: 0,
+        }
+    }
+
+    pub fn handle_msg(&mut self, msg: UiToAudioMsg) {
+        match msg {
+            UiToAudioMsg::Play => {
+                self.transport_state = TransportState::Playing;
+            }
+            UiToAudioMsg::Stop => {
+                self.transport_state = TransportState::Stopped;
+                self.current_tick = 0;
+                self.tick_accumulator = 0.0;
+                self.current_step = 0;
+            }
+            UiToAudioMsg::Record => {
+                self.transport_state = TransportState::Recording;
+            }
+            UiToAudioMsg::SetBpm(bpm) => {
+                self.project.tempo = bpm.clamp(20.0, 999.0);
+            }
+            UiToAudioMsg::SetPlaybackMode(mode) => {
+                self.project.playback_mode = mode;
+            }
+            UiToAudioMsg::SeekTick(tick) => {
+                self.current_tick = tick;
+                self.current_step = ((tick / TICKS_PER_STEP) % 16) as usize;
+            }
+            UiToAudioMsg::TriggerNoteOn {
+                channel_id,
+                pitch,
+                velocity,
+            } => {
+                let vel = if velocity <= 0.0 { 0.8 } else { velocity };
+                match channel_id {
+                    0 => self.kick.trigger(vel),
+                    1 => self.clap.trigger(vel),
+                    2 => self.hat.trigger(vel),
+                    3 => self.snare.trigger(vel),
+                    _ => self.poly_synth.note_on(pitch),
+                }
+            }
+            UiToAudioMsg::TriggerNoteOff { channel_id: _, pitch } => {
+                self.poly_synth.note_off(pitch);
+            }
+            UiToAudioMsg::UpdateStep {
+                pattern_id,
+                channel_id,
+                step_index,
+                active,
+                velocity,
+            } => {
+                if let Some(pattern) = self.project.patterns.iter_mut().find(|p| p.id == pattern_id) {
+                    let steps = pattern.get_or_create_steps(channel_id, 16);
+                    if let Some(step) = steps.get_mut(step_index) {
+                        step.active = active;
+                        step.velocity = velocity;
+                    }
+                }
+            }
+            UiToAudioMsg::SetChannelParam {
+                channel_id,
+                param_type,
+                value,
+            } => {
+                if let Some(channel) = self.project.channels.get_mut(channel_id) {
+                    match param_type {
+                        ChannelParam::Volume => channel.volume = value,
+                        ChannelParam::Pan => channel.pan = value,
+                        ChannelParam::PitchCoarse => channel.pitch_coarse = value as i32,
+                        ChannelParam::PitchFine => channel.pitch_fine = value,
+                        ChannelParam::TargetMixerTrack => channel.target_mixer_track = value as usize,
+                    }
+                }
+            }
+            UiToAudioMsg::SetMixerParam {
+                track_id,
+                param_type,
+                value,
+            } => {
+                if let Some(track) = self.project.mixer_tracks.iter_mut().find(|t| t.index == track_id) {
+                    match param_type {
+                        MixerParam::Volume => track.volume = value,
+                        MixerParam::Pan => track.pan = value,
+                        MixerParam::StereoSeparation => track.stereo_separation = value,
+                        MixerParam::Mute => track.mute = value > 0.5,
+                        MixerParam::Solo => track.solo = value > 0.5,
+                        MixerParam::SendLevel(tgt) => {
+                            if let Some(s) = track.sends.iter_mut().find(|s| s.0 == tgt) {
+                                s.1 = value;
+                            } else {
+                                track.sends.push((tgt, value));
+                            }
+                        }
+                    }
+                }
+            }
+            UiToAudioMsg::SetActivePattern(pat_id) => {
+                self.project.active_pattern = pat_id;
+            }
+            UiToAudioMsg::LoadSample { channel_id: _, path: _ } => {
+                // Carregamento de sample via Symphonia / Hound
+            }
+            UiToAudioMsg::SyncProject(p) => {
+                self.project = p;
+            }
+        }
+    }
+
+    /// Processa um bloco de áudio estéreo em tempo real
+    pub fn process_block(
+        &mut self,
+        output: &mut [f32],
+        audio_to_ui_tx: &Sender<AudioToUiMsg>,
+    ) {
+        let num_frames = output.len() / 2;
+
+        // Limpa buffer de saída
+        for sample in output.iter_mut() {
+            *sample = 0.0;
+        }
+
+        // Ticks por segundo: (BPM / 60) * 96 ticks
+        let ticks_per_second = (self.project.tempo as f64 / 60.0) * (openstudio_core::PPQ as f64);
+        let ticks_per_sample = ticks_per_second / (self.sample_rate as f64);
+
+        let mut master_peak_l = 0.0_f32;
+        let mut master_peak_r = 0.0_f32;
+
+        for frame_idx in 0..num_frames {
+            // Avança o relógio de transporte se estiver tocando
+            if self.transport_state == TransportState::Playing {
+                let prev_step = self.current_step;
+                self.tick_accumulator += ticks_per_sample;
+                while self.tick_accumulator >= 1.0 {
+                    self.tick_accumulator -= 1.0;
+                    self.current_tick += 1;
+                }
+
+                // Cálculo do step atual no Pattern mode (16 passos de 24 ticks cada)
+                let current_step = ((self.current_tick / TICKS_PER_STEP) % 16) as usize;
+                if current_step != prev_step {
+                    self.current_step = current_step;
+                    self.trigger_step_sequencer_notes(current_step);
+                    let _ = audio_to_ui_tx.try_send(AudioToUiMsg::CurrentStep(current_step));
+                }
+            }
+
+            // Somatório de todas as vozes (Bateria + Sintetizador Polifônico)
+            let (k_l, k_r) = self.kick.next_sample(self.sample_rate);
+            let (c_l, c_r) = self.clap.next_sample(self.sample_rate);
+            let (h_l, h_r) = self.hat.next_sample(self.sample_rate);
+            let (s_l, s_r) = self.snare.next_sample(self.sample_rate);
+            let (p_l, p_r) = self.poly_synth.next_sample(self.sample_rate);
+
+            let ch0_vol = self.project.channels.get(0).map(|c| c.volume).unwrap_or(0.85);
+            let ch1_vol = self.project.channels.get(1).map(|c| c.volume).unwrap_or(0.85);
+            let ch2_vol = self.project.channels.get(2).map(|c| c.volume).unwrap_or(0.85);
+            let ch3_vol = self.project.channels.get(3).map(|c| c.volume).unwrap_or(0.85);
+
+            let mixed_l = k_l * ch0_vol + c_l * ch1_vol + h_l * ch2_vol + s_l * ch3_vol + p_l;
+            let mixed_r = k_r * ch0_vol + c_r * ch1_vol + h_r * ch2_vol + s_r * ch3_vol + p_r;
+
+            // Aplica plugins do Master (Soundgoodizer + Delay + EQ2)
+            let (sg_l, sg_r) = self.soundgoodizer.process_stereo(mixed_l, mixed_r);
+            let (dl_l, dl_r) = self.delay.process_stereo(self.sample_rate, sg_l, sg_r);
+            let eq_l = self.eq2.process_sample(dl_l);
+            let eq_r = self.eq2.process_sample(dl_r);
+
+            // Volume Master e soft clipping
+            let master_vol = self.project.master_volume;
+            let final_l = (eq_l * master_vol).clamp(-1.0, 1.0);
+            let final_r = (eq_r * master_vol).clamp(-1.0, 1.0);
+
+            output[frame_idx * 2] = final_l;
+            output[frame_idx * 2 + 1] = final_r;
+
+            master_peak_l = master_peak_l.max(final_l.abs());
+            master_peak_r = master_peak_r.max(final_r.abs());
+        }
+
+        // Envia telemetria para a UI a cada ~60 quadros
+        self.frame_counter += num_frames;
+        if self.frame_counter >= (self.sample_rate as usize / 60) {
+            self.frame_counter = 0;
+            let _ = audio_to_ui_tx.try_send(AudioToUiMsg::PlayheadTick(self.current_tick));
+            let _ = audio_to_ui_tx.try_send(AudioToUiMsg::CurrentStep(self.current_step));
+            let _ = audio_to_ui_tx.try_send(AudioToUiMsg::IsPlaying(
+                self.transport_state == TransportState::Playing,
+            ));
+            let _ = audio_to_ui_tx.try_send(AudioToUiMsg::MixerMeters(vec![
+                (0, master_peak_l, master_peak_r),
+            ]));
+        }
+    }
+
+    fn trigger_step_sequencer_notes(&mut self, step_index: usize) {
+        let pat_id = self.project.active_pattern;
+        if let Some(pattern) = self.project.patterns.iter().find(|p| p.id == pat_id) {
+            for (ch_idx, steps) in &pattern.step_data {
+                if let Some(step) = steps.get(step_index) {
+                    if step.active {
+                        let vel = step.velocity;
+                        match *ch_idx {
+                            0 => self.kick.trigger(vel),
+                            1 => self.clap.trigger(vel),
+                            2 => self.hat.trigger(vel),
+                            3 => self.snare.trigger(vel),
+                            _ => self.poly_synth.note_on(60),
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Inicia o subsistema de áudio CPAL em thread dedicada de alta prioridade
+pub fn start_audio_engine(project: Project) -> Result<AudioEngineHandle, String> {
+    let host = cpal::default_host();
+    let device = host
+        .default_output_device()
+        .ok_or_else(|| "Nenhum dispositivo de áudio de saída encontrado".to_string())?;
+
+    let config = device
+        .default_output_config()
+        .map_err(|e| format!("Erro ao obter configuração padrão do dispositivo: {}", e))?;
+
+    let sample_rate = config.sample_rate() as f32;
+    let (ui_to_audio_tx, ui_to_audio_rx) = crossbeam_channel::unbounded::<UiToAudioMsg>();
+    let (audio_to_ui_tx, audio_to_ui_rx) = crossbeam_channel::unbounded::<AudioToUiMsg>();
+    let is_running = Arc::new(AtomicBool::new(true));
+
+    let mut engine = AudioEngine::new(sample_rate, project);
+
+    let err_fn = |err| eprintln!("Erro no stream de áudio CPAL: {}", err);
+
+    let stream = match config.sample_format() {
+        cpal::SampleFormat::F32 => device.build_output_stream(
+            config.into(),
+            move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                // Drena mensagens da UI
+                while let Ok(msg) = ui_to_audio_rx.try_recv() {
+                    engine.handle_msg(msg);
+                }
+                engine.process_block(data, &audio_to_ui_tx);
+            },
+            err_fn,
+            None,
+        ),
+        _ => return Err("Formato de amostra não suportado (apenas f32 é aceito)".to_string()),
+    }
+    .map_err(|e| format!("Falha ao construir stream de áudio: {}", e))?;
+
+    stream
+        .play()
+        .map_err(|e| format!("Falha ao iniciar reprodução do stream: {}", e))?;
+
+    Ok(AudioEngineHandle {
+        ui_to_audio_tx,
+        audio_to_ui_rx,
+        is_running,
+        stream: Some(stream),
+    })
+}

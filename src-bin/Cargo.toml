@@ -1,0 +1,15 @@
+[package]
+name = "openstudio"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+openstudio-core = { path = "../crates/openstudio-core" }
+openstudio-gpu = { path = "../crates/openstudio-gpu" }
+openstudio-dsp = { path = "../crates/openstudio-dsp" }
+openstudio-audio = { path = "../crates/openstudio-audio" }
+openstudio-plugins = { path = "../crates/openstudio-plugins" }
+openstudio-project = { path = "../crates/openstudio-project" }
+openstudio-ui = { path = "../crates/openstudio-ui" }
+env_logger = { workspace = true }
+log = { workspace = true }
