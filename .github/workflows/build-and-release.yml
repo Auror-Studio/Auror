@@ -108,19 +108,14 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
+          suppress-deprecation-warnings: msystem-mingw64
+          path-type: inherit
           update: true
           install: >-
             git
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-pkg-config
             mingw-w64-x86_64-gtk4
-            mingw-w64-x86_64-glib2
-            mingw-w64-x86_64-cairo
-            mingw-w64-x86_64-pango
-            mingw-w64-x86_64-gdk-pixbuf2
-            mingw-w64-x86_64-graphene
-            mingw-w64-x86_64-epoxy
-            mingw-w64-x86_64-harfbuzz
 
       - name: Setup Rust (x86_64-pc-windows-gnu)
         uses: dtolnay/rust-toolchain@stable
@@ -147,12 +142,16 @@ jobs:
           cp -r /mingw64/share/glib-2.0/schemas/* dist/windows/share/glib-2.0/schemas/ || true
           glib-compile-schemas dist/windows/share/glib-2.0/schemas/ || true
 
-          # Dependency resolution for GTK4 runtime
-          for dll in $(ldd dist/windows/aurora-studio.exe | grep -i mingw64 | awk '{print $3}'); do
-            cp -n "$dll" dist/windows/ 2>/dev/null || true
+          # Recursive DLL dependency resolution for GTK4 runtime
+          for i in 1 2 3; do
+            for dll in $(ldd dist/windows/*.exe dist/windows/*.dll 2>/dev/null | grep -i mingw64 | awk '{print $3}'); do
+              if [ -f "$dll" ]; then
+                cp -n "$dll" dist/windows/ 2>/dev/null || true
+              fi
+            done
           done
 
-          # Essential libraries
+          # Essential runtime libraries fallback
           for dll in libgtk-4-1.dll libgio-2.0-0.dll libglib-2.0-0.dll libgobject-2.0-0.dll \
                      libcairo-2.dll libpango-1.0-0.dll libpangocairo-1.0-0.dll libgdk_pixbuf-2.0-0.dll \
                      libgraphene-1.0-0.dll libepoxy-0.dll libharfbuzz-0.dll libfribidi-0.dll \
@@ -171,7 +170,16 @@ jobs:
       - name: Compile Inno Setup (.exe Installer)
         shell: pwsh
         run: |
-          & "ISCC.exe" assets\windows\installer.iss
+          if (-not (Get-Command "ISCC.exe" -ErrorAction SilentlyContinue)) {
+            $innoPath = "C:\Program Files (x86)\Inno Setup 6"
+            if (Test-Path "$innoPath\ISCC.exe") {
+              $env:PATH = "$innoPath;$env:PATH"
+            } else {
+              choco install innosetup --no-progress -y
+              $env:PATH = "$innoPath;$env:PATH"
+            }
+          }
+          & ISCC.exe assets\windows\installer.iss
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
@@ -195,6 +203,7 @@ jobs:
       - name: Install dependencies via Homebrew
         run: |
           brew install gtk4 pkg-config
+          echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig:$(brew --prefix gtk4)/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
