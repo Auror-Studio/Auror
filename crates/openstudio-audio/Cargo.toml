@@ -9,4 +9,5 @@ openstudio-dsp = { path = "../openstudio-dsp" }
 cpal = { workspace = true }
 rtrb = { workspace = true }
 crossbeam-channel = { workspace = true }
+hound = { workspace = true }
 log = { workspace = true }

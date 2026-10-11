@@ -37,6 +37,8 @@ pub struct AudioEngine {
     current_tick: u64,
     tick_accumulator: f64,
     current_step: usize,
+    last_triggered_tick: Option<u64>,
+    last_triggered_step: Option<usize>,
 
     // Geradores dedicados de alta fidelidade
     kick: DrumVoice,
@@ -62,6 +64,8 @@ impl AudioEngine {
             current_tick: 0,
             tick_accumulator: 0.0,
             current_step: 0,
+            last_triggered_tick: None,
+            last_triggered_step: None,
             kick: DrumVoice::new(DrumType::Kick),
             clap: DrumVoice::new(DrumType::Clap),
             hat: DrumVoice::new(DrumType::ClosedHat),
@@ -79,12 +83,16 @@ impl AudioEngine {
         match msg {
             UiToAudioMsg::Play => {
                 self.transport_state = TransportState::Playing;
+                self.last_triggered_tick = None;
+                self.last_triggered_step = None;
             }
             UiToAudioMsg::Stop => {
                 self.transport_state = TransportState::Stopped;
                 self.current_tick = 0;
                 self.tick_accumulator = 0.0;
                 self.current_step = 0;
+                self.last_triggered_tick = None;
+                self.last_triggered_step = None;
                 self.poly_synth.reset(); // Panic reset imediato de todos os osciladores e envelopes
                 self.delay.reset(); // Limpa ecos residuais do buffer de delay
                 self.kick.silence();
@@ -94,12 +102,16 @@ impl AudioEngine {
             }
             UiToAudioMsg::Record => {
                 self.transport_state = TransportState::Recording;
+                self.last_triggered_tick = None;
+                self.last_triggered_step = None;
             }
             UiToAudioMsg::SetBpm(bpm) => {
                 self.project.tempo = bpm.clamp(20.0, 999.0);
             }
             UiToAudioMsg::SetPlaybackMode(mode) => {
                 self.project.playback_mode = mode;
+                self.last_triggered_tick = None;
+                self.last_triggered_step = None;
                 self.poly_synth.reset();
                 self.delay.reset();
                 self.kick.silence();
@@ -109,7 +121,10 @@ impl AudioEngine {
             }
             UiToAudioMsg::SeekTick(tick) => {
                 self.current_tick = tick;
+                self.tick_accumulator = 0.0;
                 self.current_step = ((tick / TICKS_PER_STEP) % 16) as usize;
+                self.last_triggered_tick = None;
+                self.last_triggered_step = None;
                 self.poly_synth.reset();
                 self.delay.reset();
                 self.kick.silence();
@@ -302,34 +317,20 @@ impl AudioEngine {
         let mut master_peak_r = 0.0_f32;
         let mut ch_peaks = [0.0_f32; 5]; // 0: Kick, 1: Clap, 2: Hat, 3: Snare, 4: Synth
 
+        let block_start_tick = self.current_tick;
+
         for frame_idx in 0..num_frames {
             // Avança o relógio de transporte se estiver tocando ou gravando
             if self.transport_state == TransportState::Playing || self.transport_state == TransportState::Recording {
-                let prev_step = self.current_step;
-                self.tick_accumulator += ticks_per_sample;
-                while self.tick_accumulator >= 1.0 {
-                    self.tick_accumulator -= 1.0;
-                    self.current_tick += 1;
+                // 1. Disparo imediato na posição atual (garante que notas sob o cursor toquem na hora sem esperar loop!)
+                if self.last_triggered_tick != Some(self.current_tick) {
+                    self.last_triggered_tick = Some(self.current_tick);
 
                     match self.project.playback_mode {
                         openstudio_core::PlaybackMode::Pattern => {
                             self.trigger_piano_roll_notes_at_tick(self.current_tick);
                         }
                         openstudio_core::PlaybackMode::Song => {
-                            let song_end_tick = self.project.playlist_clips.iter()
-                                .filter(|c| !c.muted)
-                                .map(|c| c.start_tick + c.length_ticks)
-                                .max()
-                                .unwrap_or(TICKS_PER_STEP * 16 * 4);
-
-                            if self.current_tick >= song_end_tick {
-                                self.current_tick = 0;
-                                self.poly_synth.all_notes_off();
-                                self.kick.silence();
-                                self.clap.silence();
-                                self.hat.silence();
-                                self.snare.silence();
-                            }
                             self.trigger_song_mode_clips_at_tick(self.current_tick);
                         }
                     }
@@ -337,12 +338,39 @@ impl AudioEngine {
 
                 // Cálculo do step atual no Pattern mode (16 passos de 24 ticks cada)
                 let current_step = ((self.current_tick / TICKS_PER_STEP) % 16) as usize;
-                if current_step != prev_step {
+                if self.last_triggered_step != Some(current_step) {
+                    self.last_triggered_step = Some(current_step);
                     self.current_step = current_step;
                     if self.project.playback_mode == openstudio_core::PlaybackMode::Pattern {
                         self.trigger_step_sequencer_notes(current_step);
                     }
                     let _ = audio_to_ui_tx.try_send(AudioToUiMsg::CurrentStep(current_step));
+                }
+
+                // 2. Acumula tempo e avança para os próximos ticks
+                self.tick_accumulator += ticks_per_sample;
+                while self.tick_accumulator >= 1.0 {
+                    self.tick_accumulator -= 1.0;
+                    self.current_tick += 1;
+
+                    if self.project.playback_mode == openstudio_core::PlaybackMode::Song {
+                        let song_end_tick = self.project.playlist_clips.iter()
+                            .filter(|c| !c.muted)
+                            .map(|c| c.start_tick + c.length_ticks)
+                            .max()
+                            .unwrap_or(TICKS_PER_STEP * 16 * 4);
+
+                        if self.current_tick >= song_end_tick {
+                            self.current_tick = 0;
+                            self.last_triggered_tick = None;
+                            self.last_triggered_step = None;
+                            self.poly_synth.all_notes_off();
+                            self.kick.silence();
+                            self.clap.silence();
+                            self.hat.silence();
+                            self.snare.silence();
+                        }
+                    }
                 }
             }
 
@@ -390,7 +418,7 @@ impl AudioEngine {
         self.frame_counter += num_frames;
         if self.frame_counter >= (self.sample_rate as usize / 60) {
             self.frame_counter = 0;
-            let _ = audio_to_ui_tx.try_send(AudioToUiMsg::PlayheadTick(self.current_tick));
+            let _ = audio_to_ui_tx.try_send(AudioToUiMsg::PlayheadTick(block_start_tick));
             let _ = audio_to_ui_tx.try_send(AudioToUiMsg::CurrentStep(self.current_step));
             let _ = audio_to_ui_tx.try_send(AudioToUiMsg::IsPlaying(
                 self.transport_state == TransportState::Playing || self.transport_state == TransportState::Recording,
@@ -586,4 +614,91 @@ pub fn start_audio_engine(project: Project) -> Result<AudioEngineHandle, String>
         is_running,
         stream: Some(stream),
     })
+}
+
+/// Exporta o projeto de áudio offline para um arquivo WAV PCM estéreo de alta fidelidade
+pub fn export_project_to_wav(
+    project: &openstudio_core::Project,
+    output_path: &std::path::Path,
+) -> Result<(), String> {
+    let sample_rate = 44100;
+    let mut engine = AudioEngine::new(sample_rate as f32, project.clone());
+    engine.transport_state = TransportState::Playing;
+
+    let total_ticks = match project.playback_mode {
+        openstudio_core::PlaybackMode::Song => {
+            project
+                .playlist_clips
+                .iter()
+                .filter(|c| !c.muted)
+                .map(|c| c.start_tick + c.length_ticks)
+                .max()
+                .unwrap_or(TICKS_PER_STEP * 16 * 4)
+        }
+        openstudio_core::PlaybackMode::Pattern => {
+            let pat = project.patterns.iter().find(|p| p.id == project.active_pattern);
+            pat.map(|p| p.length_steps as u64 * TICKS_PER_STEP).unwrap_or(384)
+        }
+    };
+
+    let duration_secs = (total_ticks as f64 / openstudio_core::PPQ as f64) * (60.0 / project.tempo as f64) + 1.0;
+    let total_frames = (duration_secs * sample_rate as f64) as usize;
+
+    let spec = hound::WavSpec {
+        channels: 2,
+        sample_rate,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+
+    let mut writer = hound::WavWriter::create(output_path, spec)
+        .map_err(|e| format!("Falha ao criar arquivo WAV: {}", e))?;
+
+    let (dummy_tx, _) = crossbeam_channel::unbounded();
+    let mut block = vec![0.0f32; 1024];
+    let mut frames_left = total_frames;
+
+    while frames_left > 0 {
+        let frames_this_block = frames_left.min(512);
+        let slice = &mut block[..frames_this_block * 2];
+        engine.process_block(slice, &dummy_tx);
+
+        for &sample in slice.iter() {
+            let s_i16 = (sample.clamp(-1.0, 1.0) * 32767.0) as i16;
+            writer.write_sample(s_i16).map_err(|e| format!("Erro ao gravar sample: {}", e))?;
+        }
+
+        frames_left -= frames_this_block;
+    }
+
+    writer.finalize().map_err(|e| format!("Erro ao finalizar arquivo WAV: {}", e))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use openstudio_core::Project;
+
+    #[test]
+    fn test_export_project_to_wav() {
+        let project = Project::default();
+        let temp_dir = std::env::temp_dir();
+        let test_wav_path = temp_dir.join("openstudio_test_export.wav");
+
+        let res = export_project_to_wav(&project, &test_wav_path);
+        assert!(res.is_ok(), "WAV export failed: {:?}", res.err());
+        assert!(test_wav_path.exists(), "Exported WAV file does not exist");
+
+        // Verify with hound reader
+        let reader = hound::WavReader::open(&test_wav_path);
+        assert!(reader.is_ok());
+        let reader = reader.unwrap();
+        assert_eq!(reader.spec().channels, 2);
+        assert_eq!(reader.spec().sample_rate, 44100);
+        assert_eq!(reader.spec().bits_per_sample, 16);
+        assert!(reader.duration() > 0);
+
+        let _ = std::fs::remove_file(test_wav_path);
+    }
 }

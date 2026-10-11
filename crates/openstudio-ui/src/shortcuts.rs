@@ -19,6 +19,8 @@ pub struct ShortcutContext {
     pub on_toggle_mixer: Rc<dyn Fn()>,
     pub on_toggle_browser: Rc<dyn Fn()>,
     pub on_toggle_ghost_notes: Rc<dyn Fn()>,
+    pub on_save: Rc<dyn Fn()>,
+    pub on_export: Rc<dyn Fn()>,
 }
 
 pub fn install_fl_shortcuts(window: &impl IsA<gtk4::Widget>, ctx: ShortcutContext) {
@@ -34,12 +36,26 @@ pub fn install_fl_shortcuts(window: &impl IsA<gtk4::Widget>, ctx: ShortcutContex
     let on_mixer = ctx.on_toggle_mixer;
     let on_browser = ctx.on_toggle_browser;
     let on_ghost = ctx.on_toggle_ghost_notes;
+    let on_save = ctx.on_save;
+    let on_export = ctx.on_export;
 
     controller.connect_key_pressed(move |_controller, key, _keycode, modifier| {
         let is_ctrl = modifier.contains(ModifierType::CONTROL_MASK);
         let is_alt = modifier.contains(ModifierType::ALT_MASK);
 
         match key {
+            // Ctrl + S: Salvar Projeto (.ostudio)
+            Key::S | Key::s if is_ctrl => {
+                on_save();
+                return glib::Propagation::Stop;
+            }
+
+            // Ctrl + R: Exportar Áudio (WAV)
+            Key::R | Key::r if is_ctrl => {
+                on_export();
+                return glib::Propagation::Stop;
+            }
+
             // Space: Play / Stop clássico do FL Studio
             Key::space => {
                 on_play();

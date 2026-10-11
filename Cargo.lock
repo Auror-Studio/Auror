@@ -1005,6 +1005,7 @@ version = "0.1.0"
 dependencies = [
  "cpal",
  "crossbeam-channel",
+ "hound",
  "log",
  "openstudio-core",
  "openstudio-dsp",

@@ -6,6 +6,7 @@ pub mod mixer;
 pub mod piano_roll;
 pub mod playlist;
 pub mod plugin_dialog;
+pub mod project_dialogs;
 pub mod shortcuts;
 pub mod styles;
 pub mod transport;

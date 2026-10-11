@@ -18,6 +18,7 @@ use crate::channel_rack::ChannelRackWidget;
 use crate::mixer::MixerWidget;
 use crate::piano_roll::PianoRollWidget;
 use crate::playlist::PlaylistWidget;
+use crate::project_dialogs::{show_export_audio_dialog, show_save_project_dialog};
 use crate::shortcuts::{install_fl_shortcuts, ShortcutContext};
 use crate::styles::FL_STUDIO_CSS;
 use crate::transport::TransportBar;
@@ -192,11 +193,25 @@ fn build_ui(
     let work_area = Box::new(Orientation::Horizontal, 4);
     work_area.add_css_class("workspace-box");
 
+    let win_save = window.clone();
+    let proj_save = project.clone();
+    let on_save_project = Rc::new(move || {
+        show_save_project_dialog(&win_save, proj_save.clone());
+    });
+
+    let win_exp = window.clone();
+    let proj_exp = project.clone();
+    let on_export_audio = Rc::new(move || {
+        show_export_audio_dialog(&win_exp, proj_exp.clone());
+    });
+
     let browser = BrowserWidget::new(
         plugin_db,
         tx.clone(),
         Some(window.clone()),
         Some(switch_to_view.clone()),
+        Some(on_save_project.clone()),
+        Some(on_export_audio.clone()),
     );
     work_area.append(&browser.container);
     work_area.append(&stack);
@@ -262,6 +277,8 @@ fn build_ui(
         on_toggle_ghost_notes: Rc::new(move || {
             pr_ghost.toggle_ghost_notes();
         }),
+        on_save: on_save_project,
+        on_export: on_export_audio,
     };
 
     install_fl_shortcuts(&window, shortcut_ctx);

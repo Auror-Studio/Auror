@@ -11,6 +11,7 @@ pub struct BrowserWidget {
 }
 
 pub type ViewSwitchCallback = Option<Rc<dyn Fn(&str)>>;
+pub type ActionCallback = Option<Rc<dyn Fn()>>;
 
 impl BrowserWidget {
     pub fn new(
@@ -18,6 +19,8 @@ impl BrowserWidget {
         tx: Sender<UiToAudioMsg>,
         window: Option<ApplicationWindow>,
         on_switch_view: ViewSwitchCallback,
+        on_save_project: ActionCallback,
+        on_export_audio: ActionCallback,
     ) -> Self {
         let container = Box::new(Orientation::Vertical, 4);
         container.add_css_class("browser-tree");
@@ -143,6 +146,28 @@ impl BrowserWidget {
             }
         });
         list_box.append(&mx_btn);
+
+        // Salvar Projeto
+        let save_btn = Button::with_label("  💾 Salvar Projeto [Ctrl+S]");
+        save_btn.add_css_class("transport-btn");
+        let on_save = on_save_project.clone();
+        save_btn.connect_clicked(move |_| {
+            if let Some(ref cb) = on_save {
+                cb();
+            }
+        });
+        list_box.append(&save_btn);
+
+        // Exportar Áudio
+        let exp_btn = Button::with_label("  🎵 Exportar Áudio (WAV) [Ctrl+R]");
+        exp_btn.add_css_class("transport-btn");
+        let on_exp = on_export_audio.clone();
+        exp_btn.connect_clicked(move |_| {
+            if let Some(ref cb) = on_exp {
+                cb();
+            }
+        });
+        list_box.append(&exp_btn);
 
         // Histórico / Desfazer
         let undo_btn = Button::with_label("  ↩ Histórico / Desfazer");

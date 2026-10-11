@@ -251,6 +251,7 @@ impl PianoRollWidget {
         let drag_click = drag_mode.clone();
         let tx_click = tx.clone();
         let canvas_click = canvas.clone();
+        let playhead_click = playhead_tick.clone();
 
         gesture.connect_pressed(move |g, _n_press, x, y| {
             let button = g.current_button();
@@ -262,6 +263,7 @@ impl PianoRollWidget {
                 if button == 1 {
                     let step = ((x - KEYBOARD_WIDTH) / STEP_WIDTH).max(0.0) as u64;
                     let tick = step * 24;
+                    *playhead_click.borrow_mut() = tick;
                     let _ = tx_click.send(UiToAudioMsg::SeekTick(tick));
                     *drag_click.borrow_mut() = DragMode::Ruler;
                     canvas_click.queue_draw();
@@ -505,12 +507,20 @@ impl PianoRollWidget {
         let drag_motion = drag_mode.clone();
         let tx_motion = tx.clone();
         let canvas_motion = canvas.clone();
+        let playhead_motion = playhead_tick.clone();
 
         motion.connect_motion(move |_m, x, y| {
             let ch_id = *ch_motion.borrow();
             let mode = *drag_motion.borrow();
 
             match mode {
+                DragMode::Ruler => {
+                    let step = ((x - KEYBOARD_WIDTH) / STEP_WIDTH).max(0.0) as u64;
+                    let tick = step * 24;
+                    *playhead_motion.borrow_mut() = tick;
+                    let _ = tx_motion.send(UiToAudioMsg::SeekTick(tick));
+                    canvas_motion.queue_draw();
+                }
                 DragMode::Keyboard { pitch: prev_pitch } => {
                     let row = ((y - RULER_HEIGHT) / KEY_HEIGHT) as i32;
                     let new_pitch = (MAX_PITCH - row).clamp(MIN_PITCH, MAX_PITCH) as u8;
@@ -528,12 +538,6 @@ impl PianoRollWidget {
                         *drag_motion.borrow_mut() = DragMode::Keyboard { pitch: new_pitch };
                         canvas_motion.queue_draw();
                     }
-                }
-                DragMode::Ruler => {
-                    let step = ((x - KEYBOARD_WIDTH) / STEP_WIDTH).max(0.0) as u64;
-                    let tick = step * 24;
-                    let _ = tx_motion.send(UiToAudioMsg::SeekTick(tick));
-                    canvas_motion.queue_draw();
                 }
                 DragMode::DrawingNote {
                     note_id,

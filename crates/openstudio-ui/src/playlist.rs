@@ -131,6 +131,7 @@ impl PlaylistWidget {
         let mutes_click = track_mutes.clone();
         let tx_click = tx.clone();
         let canvas_click = canvas.clone();
+        let playhead_click = playhead_tick.clone();
 
         gesture.connect_pressed(move |g, _n_press, x, y| {
             let button = g.current_button();
@@ -140,6 +141,7 @@ impl PlaylistWidget {
                 if button == 1 {
                     let bar_f = ((x - HEADER_WIDTH) / BAR_WIDTH).max(0.0);
                     let tick = (bar_f * (TICKS_PER_BAR as f64)) as u64;
+                    *playhead_click.borrow_mut() = tick;
                     let _ = tx_click.send(UiToAudioMsg::SeekTick(tick));
                     *drag_click.borrow_mut() = DragMode::Ruler;
                     canvas_click.queue_draw();
@@ -258,6 +260,7 @@ impl PlaylistWidget {
         let drag_motion = drag_mode.clone();
         let tx_motion = tx.clone();
         let canvas_motion = canvas.clone();
+        let playhead_motion = playhead_tick.clone();
 
         motion.connect_motion(move |_m, x, y| {
             let mode = *drag_motion.borrow();
@@ -265,6 +268,7 @@ impl PlaylistWidget {
                 DragMode::Ruler => {
                     let bar_f = ((x - HEADER_WIDTH) / BAR_WIDTH).max(0.0);
                     let tick = (bar_f * (TICKS_PER_BAR as f64)) as u64;
+                    *playhead_motion.borrow_mut() = tick;
                     let _ = tx_motion.send(UiToAudioMsg::SeekTick(tick));
                     canvas_motion.queue_draw();
                 }
