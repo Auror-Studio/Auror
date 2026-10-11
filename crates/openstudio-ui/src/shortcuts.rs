@@ -12,6 +12,7 @@ pub struct ShortcutContext {
     pub tx: Sender<UiToAudioMsg>,
     pub on_toggle_play: Rc<dyn Fn()>,
     pub on_toggle_mode: Rc<dyn Fn()>,
+    pub on_toggle_record: Rc<dyn Fn()>,
     pub on_toggle_playlist: Rc<dyn Fn()>,
     pub on_toggle_channel_rack: Rc<dyn Fn()>,
     pub on_toggle_piano_roll: Rc<dyn Fn()>,
@@ -23,9 +24,10 @@ pub struct ShortcutContext {
 pub fn install_fl_shortcuts(window: &impl IsA<gtk4::Widget>, ctx: ShortcutContext) {
     let controller = EventControllerKey::new();
 
-    let tx = ctx.tx;
+    let _tx = ctx.tx;
     let on_play = ctx.on_toggle_play;
     let on_mode = ctx.on_toggle_mode;
+    let on_record = ctx.on_toggle_record;
     let on_playlist = ctx.on_toggle_playlist;
     let on_channel_rack = ctx.on_toggle_channel_rack;
     let on_piano_roll = ctx.on_toggle_piano_roll;
@@ -52,7 +54,7 @@ pub fn install_fl_shortcuts(window: &impl IsA<gtk4::Widget>, ctx: ShortcutContex
 
             // R: Alternar Gravação
             Key::R | Key::r if !is_ctrl && !is_alt => {
-                let _ = tx.send(UiToAudioMsg::Record);
+                on_record();
                 return glib::Propagation::Stop;
             }
 

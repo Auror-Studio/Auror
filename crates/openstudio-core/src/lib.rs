@@ -267,63 +267,69 @@ impl Default for Project {
         let default_colors = [0xff6b6b, 0x48dbfb, 0xfeca57, 0x1dd1a1, 0xa29bfe];
         let mut channels = Vec::new();
         for (i, name) in default_channel_names.iter().enumerate() {
-            let mut ch = Channel::default();
-            ch.id = i;
-            ch.name = name.to_string();
-            ch.color = default_colors[i];
-            ch.target_mixer_track = i + 1; // Inserts 1, 2, 3, 4, 5
-            if i == 4 {
-                ch.channel_type = ChannelType::Synth3xOsc;
-            }
+            let channel_type = if i == 4 {
+                ChannelType::Synth3xOsc
+            } else {
+                ChannelType::Sampler
+            };
+            let ch = Channel {
+                id: i,
+                name: name.to_string(),
+                color: default_colors[i],
+                target_mixer_track: i + 1, // Inserts 1, 2, 3, 4, 5
+                channel_type,
+                ..Default::default()
+            };
             channels.push(ch);
         }
 
         // Notas iniciais no Piano Roll para o canal 4 (3x Osc Synth) - Acorde C Minor 7th
-        let mut synth_notes = Vec::new();
-        synth_notes.push(Note {
-            id: 1,
-            pitch: 60, // C5
-            velocity: 0.85,
-            start_tick: 0,
-            duration_ticks: 96,
-            pan: 0.0,
-            release: 0.5,
-            color_index: 0,
-            muted: false,
-        });
-        synth_notes.push(Note {
-            id: 2,
-            pitch: 63, // D#5
-            velocity: 0.80,
-            start_tick: 0,
-            duration_ticks: 96,
-            pan: 0.0,
-            release: 0.5,
-            color_index: 0,
-            muted: false,
-        });
-        synth_notes.push(Note {
-            id: 3,
-            pitch: 67, // G5
-            velocity: 0.85,
-            start_tick: 0,
-            duration_ticks: 96,
-            pan: 0.0,
-            release: 0.5,
-            color_index: 0,
-            muted: false,
-        });
-        synth_notes.push(Note {
-            id: 4,
-            pitch: 70, // A#5
-            velocity: 0.75,
-            start_tick: 0,
-            duration_ticks: 96,
-            pan: 0.0,
-            release: 0.5,
-            color_index: 0,
-            muted: false,
-        });
+        let synth_notes = vec![
+            Note {
+                id: 1,
+                pitch: 60, // C5
+                velocity: 0.85,
+                start_tick: 0,
+                duration_ticks: 96,
+                pan: 0.0,
+                release: 0.5,
+                color_index: 0,
+                muted: false,
+            },
+            Note {
+                id: 2,
+                pitch: 63, // D#5
+                velocity: 0.80,
+                start_tick: 0,
+                duration_ticks: 96,
+                pan: 0.0,
+                release: 0.5,
+                color_index: 0,
+                muted: false,
+            },
+            Note {
+                id: 3,
+                pitch: 67, // G5
+                velocity: 0.85,
+                start_tick: 0,
+                duration_ticks: 96,
+                pan: 0.0,
+                release: 0.5,
+                color_index: 0,
+                muted: false,
+            },
+            Note {
+                id: 4,
+                pitch: 70, // A#5
+                velocity: 0.75,
+                start_tick: 0,
+                duration_ticks: 96,
+                pan: 0.0,
+                release: 0.5,
+                color_index: 0,
+                muted: false,
+            },
+        ];
         pat1.piano_roll_notes.insert(4, synth_notes);
 
         // Batidas padrão no Step Sequencer

@@ -5,11 +5,13 @@ use crossbeam_channel::Sender;
 use std::cell::RefCell;
 use std::rc::Rc;
 
+pub type OpenPianoRollCallback = Rc<RefCell<Option<Rc<dyn Fn(usize)>>>>;
+
 pub struct ChannelRackWidget {
     pub container: Box,
     pub step_buttons: Vec<Vec<ToggleButton>>,
     pub current_playhead: Rc<RefCell<usize>>,
-    pub on_open_piano_roll: Rc<RefCell<Option<Rc<dyn Fn(usize)>>>>,
+    pub on_open_piano_roll: OpenPianoRollCallback,
 }
 
 impl ChannelRackWidget {

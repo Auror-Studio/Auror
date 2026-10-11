@@ -655,10 +655,7 @@ impl PianoRollWidget {
                 let pitch = MAX_PITCH - i;
                 let y = RULER_HEIGHT + (i as f64) * KEY_HEIGHT;
 
-                let is_black = match pitch.rem_euclid(12) {
-                    1 | 3 | 6 | 8 | 10 => true,
-                    _ => false,
-                };
+                let is_black = matches!(pitch.rem_euclid(12), 1 | 3 | 6 | 8 | 10);
 
                 if is_black {
                     cr.set_source_rgb(0.09, 0.10, 0.13);
@@ -782,10 +779,7 @@ impl PianoRollWidget {
                 let pitch = MAX_PITCH - i;
                 let y = RULER_HEIGHT + (i as f64) * KEY_HEIGHT;
 
-                let is_black = match pitch.rem_euclid(12) {
-                    1 | 3 | 6 | 8 | 10 => true,
-                    _ => false,
-                };
+                let is_black = matches!(pitch.rem_euclid(12), 1 | 3 | 6 | 8 | 10);
 
                 let is_pressed = pressed_pitch == Some(pitch);
 

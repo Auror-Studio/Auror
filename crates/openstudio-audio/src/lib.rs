@@ -85,7 +85,8 @@ impl AudioEngine {
                 self.current_tick = 0;
                 self.tick_accumulator = 0.0;
                 self.current_step = 0;
-                self.poly_synth.all_notes_off();
+                self.poly_synth.reset(); // Panic reset imediato de todos os osciladores e envelopes
+                self.delay.reset(); // Limpa ecos residuais do buffer de delay
                 self.kick.silence();
                 self.clap.silence();
                 self.hat.silence();
@@ -99,7 +100,8 @@ impl AudioEngine {
             }
             UiToAudioMsg::SetPlaybackMode(mode) => {
                 self.project.playback_mode = mode;
-                self.poly_synth.all_notes_off();
+                self.poly_synth.reset();
+                self.delay.reset();
                 self.kick.silence();
                 self.clap.silence();
                 self.hat.silence();
@@ -108,7 +110,8 @@ impl AudioEngine {
             UiToAudioMsg::SeekTick(tick) => {
                 self.current_tick = tick;
                 self.current_step = ((tick / TICKS_PER_STEP) % 16) as usize;
-                self.poly_synth.all_notes_off();
+                self.poly_synth.reset();
+                self.delay.reset();
                 self.kick.silence();
                 self.clap.silence();
                 self.hat.silence();
@@ -126,6 +129,38 @@ impl AudioEngine {
                     2 => self.hat.trigger(vel),
                     3 => self.snare.trigger(vel),
                     _ => self.poly_synth.note_on(pitch),
+                }
+
+                // Captura e gravação em tempo real no Pattern ativo
+                if self.transport_state == TransportState::Recording {
+                    let pat_id = self.project.active_pattern;
+                    let current_tick = self.current_tick;
+                    if let Some(pattern) = self.project.patterns.iter_mut().find(|p| p.id == pat_id) {
+                        if channel_id < 4 {
+                            let step_idx = ((current_tick / TICKS_PER_STEP) % 16) as usize;
+                            let steps = pattern.get_or_create_steps(channel_id, 16);
+                            if let Some(st) = steps.get_mut(step_idx) {
+                                st.active = true;
+                                st.velocity = vel;
+                            }
+                        } else {
+                            let pat_len = (pattern.length_steps as u64) * TICKS_PER_STEP;
+                            let rel_tick = if pat_len > 0 { current_tick % pat_len } else { current_tick };
+                            let notes = pattern.piano_roll_notes.entry(channel_id).or_insert_with(Vec::new);
+                            let new_id = (notes.len() as u64) + 1;
+                            notes.push(openstudio_core::Note {
+                                id: new_id,
+                                pitch,
+                                velocity: vel,
+                                start_tick: rel_tick,
+                                duration_ticks: 48, // 1/2 tempo padrão
+                                pan: 0.0,
+                                release: 0.5,
+                                color_index: 0,
+                                muted: false,
+                            });
+                        }
+                    }
                 }
             }
             UiToAudioMsg::TriggerNoteOff { channel_id: _, pitch } => {
@@ -268,8 +303,8 @@ impl AudioEngine {
         let mut ch_peaks = [0.0_f32; 5]; // 0: Kick, 1: Clap, 2: Hat, 3: Snare, 4: Synth
 
         for frame_idx in 0..num_frames {
-            // Avança o relógio de transporte se estiver tocando
-            if self.transport_state == TransportState::Playing {
+            // Avança o relógio de transporte se estiver tocando ou gravando
+            if self.transport_state == TransportState::Playing || self.transport_state == TransportState::Recording {
                 let prev_step = self.current_step;
                 self.tick_accumulator += ticks_per_sample;
                 while self.tick_accumulator >= 1.0 {
@@ -324,7 +359,7 @@ impl AudioEngine {
             ch_peaks[3] = ch_peaks[3].max(s_l.abs().max(s_r.abs()));
             ch_peaks[4] = ch_peaks[4].max(p_l.abs().max(p_r.abs()));
 
-            let ch0_vol = self.project.channels.get(0).map(|c| c.volume).unwrap_or(0.85);
+            let ch0_vol = self.project.channels.first().map(|c| c.volume).unwrap_or(0.85);
             let ch1_vol = self.project.channels.get(1).map(|c| c.volume).unwrap_or(0.85);
             let ch2_vol = self.project.channels.get(2).map(|c| c.volume).unwrap_or(0.85);
             let ch3_vol = self.project.channels.get(3).map(|c| c.volume).unwrap_or(0.85);
@@ -358,13 +393,13 @@ impl AudioEngine {
             let _ = audio_to_ui_tx.try_send(AudioToUiMsg::PlayheadTick(self.current_tick));
             let _ = audio_to_ui_tx.try_send(AudioToUiMsg::CurrentStep(self.current_step));
             let _ = audio_to_ui_tx.try_send(AudioToUiMsg::IsPlaying(
-                self.transport_state == TransportState::Playing,
+                self.transport_state == TransportState::Playing || self.transport_state == TransportState::Recording,
             ));
 
             // Telemetria de pico para Master (0) e Inserts 1 a 5
             let mut meters = vec![(0, master_peak_l, master_peak_r)];
-            for i in 0..5 {
-                meters.push((i + 1, ch_peaks[i], ch_peaks[i]));
+            for (i, peak) in ch_peaks.iter().enumerate() {
+                meters.push((i + 1, *peak, *peak));
             }
             let _ = audio_to_ui_tx.try_send(AudioToUiMsg::MixerMeters(meters));
         }
@@ -402,10 +437,8 @@ impl AudioEngine {
                         continue;
                     }
                     let end_tick = note.start_tick + note.duration_ticks;
-                    if end_tick == rel_tick || (end_tick >= pat_len_ticks && rel_tick == 0) {
-                        if *ch_id >= 4 {
-                            self.poly_synth.note_off(note.pitch);
-                        }
+                    if (end_tick == rel_tick || (end_tick >= pat_len_ticks && rel_tick == 0)) && *ch_id >= 4 {
+                        self.poly_synth.note_off(note.pitch);
                     }
                     if note.start_tick == rel_tick {
                         let vel = note.velocity;
@@ -458,7 +491,7 @@ impl AudioEngine {
                         let rel_tick = (tick - clip.start_tick) % pat_len_ticks;
 
                         // Disparo de passos do sequenciador (deduplicado para evitar flams/duplicação se o mesmo pattern estiver empilhado)
-                        if rel_tick % TICKS_PER_STEP == 0 && !triggered_step_patterns.contains(&pat_id) {
+                        if rel_tick.is_multiple_of(TICKS_PER_STEP) && !triggered_step_patterns.contains(&pat_id) {
                             triggered_step_patterns.push(pat_id);
                             let step_idx = (rel_tick / TICKS_PER_STEP) as usize;
                             for (ch_idx, steps) in &pattern.step_data {
@@ -484,10 +517,8 @@ impl AudioEngine {
                                     continue;
                                 }
                                 let end_tick = note.start_tick + note.duration_ticks;
-                                if end_tick == rel_tick || (end_tick >= pat_len_ticks && rel_tick == 0) {
-                                    if *ch_id >= 4 {
-                                        self.poly_synth.note_off(note.pitch);
-                                    }
+                                if (end_tick == rel_tick || (end_tick >= pat_len_ticks && rel_tick == 0)) && *ch_id >= 4 {
+                                    self.poly_synth.note_off(note.pitch);
                                 }
                                 if note.start_tick == rel_tick {
                                     let vel = note.velocity;

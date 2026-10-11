@@ -336,6 +336,9 @@ impl Fruity3xOsc {
     pub fn reset(&mut self) {
         self.envelope.reset();
         self.filter.reset();
+        self.osc1.phase = 0.0;
+        self.osc2.phase = 0.0;
+        self.osc3.phase = 0.0;
     }
 }
 
@@ -473,6 +476,12 @@ impl FruityDelay {
         self.write_pos = (self.write_pos + 1) % self.buffer_l.len();
 
         (in_l + delayed_l * self.wet, in_r + delayed_r * self.wet)
+    }
+
+    pub fn reset(&mut self) {
+        self.buffer_l.fill(0.0);
+        self.buffer_r.fill(0.0);
+        self.write_pos = 0;
     }
 }
 
@@ -655,16 +664,15 @@ impl PolyphonicSynth {
 
     pub fn all_notes_off(&mut self) {
         for v in &mut self.voices {
-            if v.active {
-                v.active = false;
-                v.synth.release_note();
-            }
+            v.active = false;
+            v.synth.release_note();
         }
     }
 
     pub fn reset(&mut self) {
         for v in &mut self.voices {
             v.active = false;
+            v.pitch = 0;
             v.synth.reset();
         }
     }
@@ -771,5 +779,17 @@ mod tests {
         let (k_l, k_r) = kick.next_sample(44100.0);
         assert_eq!(k_l, 0.0);
         assert_eq!(k_r, 0.0);
+    }
+
+    #[test]
+    fn test_fruity_delay_reset() {
+        let mut delay = FruityDelay::default();
+        delay.enabled = true;
+        delay.wet = 0.5;
+        let _ = delay.process_stereo(44100.0, 1.0, 1.0);
+        delay.reset();
+        assert_eq!(delay.write_pos, 0);
+        assert_eq!(delay.buffer_l[0], 0.0);
+        assert_eq!(delay.buffer_r[0], 0.0);
     }
 }

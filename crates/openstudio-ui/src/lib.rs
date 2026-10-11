@@ -5,6 +5,7 @@ pub mod gpu_dialog;
 pub mod mixer;
 pub mod piano_roll;
 pub mod playlist;
+pub mod plugin_dialog;
 pub mod shortcuts;
 pub mod styles;
 pub mod transport;

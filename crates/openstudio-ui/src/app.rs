@@ -29,6 +29,12 @@ pub struct OpenStudioApp {
     pub plugin_db: PluginDatabase,
 }
 
+impl Default for OpenStudioApp {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OpenStudioApp {
     pub fn new() -> Self {
         let gpu_info = detect_primary_gpu();
@@ -117,12 +123,6 @@ fn build_ui(
     root_v_box.append(&transport.container);
 
     // 3. Área Central de Trabalho (Navegador na Esquerda + Stack Modular estilo FL Studio)
-    let work_area = Box::new(Orientation::Horizontal, 4);
-    work_area.add_css_class("workspace-box");
-
-    let browser = BrowserWidget::new(plugin_db, tx.clone());
-    work_area.append(&browser.container);
-
     // Stack central sem abas feias - troca fluida entre Channel Rack, Piano Roll, Playlist e Mixer
     let stack = Stack::new();
     stack.set_hexpand(true);
@@ -141,11 +141,6 @@ fn build_ui(
 
     // Channel Rack como visão inicial
     stack.set_visible_child_name("channel_rack");
-
-    work_area.append(&stack);
-    root_v_box.append(&work_area);
-
-    window.set_child(Some(&root_v_box));
 
     // 4. Conexão dos botões da barra superior com destaque visual ativo
     let f5_btn = transport.f5_btn.clone();
@@ -195,6 +190,21 @@ fn build_ui(
     let sw_f9 = switch_to_view.clone();
     f9_btn.connect_clicked(move |_| sw_f9("mixer"));
 
+    let work_area = Box::new(Orientation::Horizontal, 4);
+    work_area.add_css_class("workspace-box");
+
+    let browser = BrowserWidget::new(
+        plugin_db,
+        tx.clone(),
+        Some(window.clone()),
+        Some(switch_to_view.clone()),
+    );
+    work_area.append(&browser.container);
+    work_area.append(&stack);
+    root_v_box.append(&work_area);
+
+    window.set_child(Some(&root_v_box));
+
     // Atalho do Channel Rack para abrir Piano Roll diretamente no canal clicado
     let sw_pr_jump = switch_to_view.clone();
     let pr_jump_inst = piano_roll.clone();
@@ -237,12 +247,18 @@ fn build_ui(
         let _ = tx_toggle_mode.send(UiToAudioMsg::SetPlaybackMode(new_mode));
     });
 
+    let transport_rec_ref = transport.clone();
+    let on_toggle_record = Rc::new(move || {
+        transport_rec_ref.toggle_record();
+    });
+
     let shortcut_ctx = ShortcutContext {
         is_playing: is_playing.clone(),
         playback_mode: playback_mode.clone(),
         tx: tx.clone(),
         on_toggle_play,
         on_toggle_mode,
+        on_toggle_record,
         on_toggle_playlist: Rc::new(move || sw_short_f5("playlist")),
         on_toggle_channel_rack: Rc::new(move || sw_short_f6("channel_rack")),
         on_toggle_piano_roll: Rc::new(move || sw_short_f7("piano_roll")),

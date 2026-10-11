@@ -82,9 +82,14 @@ impl TransportBar {
 
         let tx_play = tx.clone();
         let play_btn_clone = play_btn.clone();
+        let rec_btn_for_play = record_btn.clone();
         play_btn.connect_toggled(move |btn| {
             if btn.is_active() {
-                let _ = tx_play.send(UiToAudioMsg::Play);
+                if rec_btn_for_play.is_active() {
+                    let _ = tx_play.send(UiToAudioMsg::Record);
+                } else {
+                    let _ = tx_play.send(UiToAudioMsg::Play);
+                }
             } else {
                 let _ = tx_play.send(UiToAudioMsg::Stop);
             }
@@ -92,17 +97,23 @@ impl TransportBar {
 
         let tx_stop = tx.clone();
         let play_btn_clone2 = play_btn_clone.clone();
+        let rec_btn_clone2 = record_btn.clone();
         stop_btn.connect_clicked(move |_| {
             play_btn_clone2.set_active(false);
+            rec_btn_clone2.set_active(false);
             let _ = tx_stop.send(UiToAudioMsg::Stop);
         });
 
         let tx_rec = tx.clone();
+        let play_btn_clone3 = play_btn_clone.clone();
         record_btn.connect_toggled(move |btn| {
             if btn.is_active() {
+                play_btn_clone3.set_active(true);
                 let _ = tx_rec.send(UiToAudioMsg::Record);
             } else {
-                let _ = tx_rec.send(UiToAudioMsg::Stop);
+                if play_btn_clone3.is_active() {
+                    let _ = tx_rec.send(UiToAudioMsg::Play);
+                }
             }
         });
 
@@ -234,5 +245,10 @@ impl TransportBar {
         if self.play_btn.is_active() != playing {
             self.play_btn.set_active(playing);
         }
+    }
+
+    pub fn toggle_record(&self) {
+        let current = self.record_btn.is_active();
+        self.record_btn.set_active(!current);
     }
 }

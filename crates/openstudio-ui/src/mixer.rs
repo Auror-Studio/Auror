@@ -54,7 +54,7 @@ impl MixerWidget {
         ];
 
         // Construção dos canais do Mixer (0 = Master, 1..12 = Inserts)
-        for track_id in 0..=12 {
+        for (track_id, track_name) in track_names.iter().enumerate() {
             let track_box = Box::new(Orientation::Vertical, 3);
             track_box.add_css_class("mixer-track-box");
             if track_id == 0 {
@@ -62,7 +62,7 @@ impl MixerWidget {
             }
 
             // Nome do Canal
-            let name_lbl = Label::new(Some(track_names[track_id]));
+            let name_lbl = Label::new(Some(*track_name));
             name_lbl.add_css_class("mixer-track-name");
             track_box.append(&name_lbl);
 
@@ -99,7 +99,7 @@ impl MixerWidget {
                 let meter_h = lvl * height as f64;
                 let y_start = height as f64 - meter_h;
 
-                for y_step in (0..height as i32).rev() {
+                for y_step in (0..height).rev() {
                     let y = y_step as f64;
                     if y >= y_start {
                         let rel = 1.0 - (y / height as f64);
