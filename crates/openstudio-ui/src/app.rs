@@ -118,7 +118,7 @@ fn build_ui(
     let work_area = Box::new(Orientation::Horizontal, 4);
     work_area.add_css_class("workspace-box");
 
-    let browser = BrowserWidget::new(plugin_db);
+    let browser = BrowserWidget::new(plugin_db, tx.clone());
     work_area.append(&browser.container);
 
     // Stack central sem abas feias - troca fluida entre Channel Rack, Piano Roll, Playlist e Mixer
@@ -179,6 +179,14 @@ fn build_ui(
     let sw_f9 = switch_to_view.clone();
     f9_btn.connect_clicked(move |_| sw_f9("mixer"));
 
+    // Atalho do Channel Rack para abrir Piano Roll diretamente no canal clicado
+    let sw_pr_jump = switch_to_view.clone();
+    let pr_jump_inst = piano_roll.clone();
+    *channel_rack.on_open_piano_roll.borrow_mut() = Some(Rc::new(move |ch_id| {
+        pr_jump_inst.set_active_channel(ch_id);
+        sw_pr_jump("piano_roll");
+    }));
+
     // Botão de GPU abre diálogo de aceleração de hardware
     let win_gpu = window.clone();
     let gpu_clone = gpu_info.clone();
@@ -221,6 +229,7 @@ fn build_ui(
     let mixer_ref = mixer;
     let channel_rack_ref = channel_rack;
     let piano_roll_ref = piano_roll.clone();
+    let playlist_ref = playlist.clone();
     let _audio_guard = audio_holder.clone();
 
     glib::timeout_add_local(Duration::from_millis(16), move || {
@@ -235,6 +244,7 @@ fn build_ui(
                     let step = (total_steps % 4) + 1;
                     time_label.set_text(&format!("{:03}:{:02}:{:02}", bar, beat, step));
                     piano_roll_ref.update_playhead(tick);
+                    playlist_ref.update_playhead(tick);
                 }
                 AudioToUiMsg::CurrentStep(step) => {
                     // Animação luminosa do Playhead correndo pelos 16 passos
@@ -242,12 +252,7 @@ fn build_ui(
                 }
                 AudioToUiMsg::IsPlaying(_playing) => {}
                 AudioToUiMsg::MixerMeters(meters) => {
-                    for (track_id, peak_l, peak_r) in meters {
-                        if track_id == 0 {
-                            let max_peak = peak_l.max(peak_r);
-                            mixer_ref.update_master_meter(max_peak);
-                        }
-                    }
+                    mixer_ref.update_meters(&meters);
                 }
                 AudioToUiMsg::ActiveVoices(_) => {}
                 AudioToUiMsg::CpuLoad(_) => {}

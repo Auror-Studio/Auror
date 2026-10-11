@@ -356,6 +356,19 @@ impl Default for Project {
             mixer_tracks.push(MixerTrack::new(i, format!("Insert {}", i)));
         }
 
+        // Clipes iniciais na Playlist (Track 1 organizada por 4 compassos com Pattern 1)
+        let mut playlist_clips = Vec::new();
+        for bar in 0..4 {
+            playlist_clips.push(PlaylistClip {
+                id: (bar + 1) as u64,
+                track_index: 0,
+                start_tick: (bar as u64) * 384,
+                length_ticks: 384,
+                payload: ClipPayload::Pattern(0),
+                muted: false,
+            });
+        }
+
         Self {
             name: "Novo Projeto".to_string(),
             tempo: 130.0,
@@ -365,7 +378,7 @@ impl Default for Project {
             active_pattern: 0,
             channels,
             patterns,
-            playlist_clips: Vec::new(),
+            playlist_clips,
             mixer_tracks,
         }
     }
@@ -401,6 +414,7 @@ pub enum UiToAudioMsg {
         channel_id: usize,
         notes: Vec<Note>,
     },
+    UpdatePlaylistClips(Vec<PlaylistClip>),
     SetChannelParam {
         channel_id: usize,
         param_type: ChannelParam,
@@ -411,6 +425,17 @@ pub enum UiToAudioMsg {
         param_type: MixerParam,
         value: f32,
     },
+    SetMixerSlotBypass {
+        track_id: usize,
+        slot_index: usize,
+        enabled: bool,
+    },
+    SetMixerSlotWet {
+        track_id: usize,
+        slot_index: usize,
+        wet: f32,
+    },
+    SetSwing(f32),
     SetActivePattern(usize),
     LoadSample {
         channel_id: usize,
@@ -469,5 +494,14 @@ mod tests {
         let n = Note::default();
         assert_eq!(n.duration_ticks, TICKS_PER_STEP * 4);
         assert_eq!(TICKS_PER_STEP * 4, PPQ);
+    }
+
+    #[test]
+    fn test_playlist_clips_initialization() {
+        let p = Project::default();
+        assert_eq!(p.playlist_clips.len(), 4);
+        assert_eq!(p.playlist_clips[0].start_tick, 0);
+        assert_eq!(p.playlist_clips[0].length_ticks, 384);
+        assert_eq!(p.playlist_clips[1].start_tick, 384);
     }
 }

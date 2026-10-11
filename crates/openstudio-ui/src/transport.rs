@@ -103,11 +103,42 @@ impl TransportBar {
         container.append(&record_btn);
 
         // 3. Displays Digitais LCD (BPM e Tempo)
-        let bpm_display = Box::new(Orientation::Horizontal, 4);
+        let bpm_display = Box::new(Orientation::Horizontal, 2);
         bpm_display.add_css_class("lcd-display");
-        let bpm_label = Label::new(Some(&format!("{:.2} BPM", initial_bpm)));
+
+        let current_bpm = std::rc::Rc::new(std::cell::RefCell::new(initial_bpm));
+
+        let bpm_dec_btn = Button::with_label("-");
+        bpm_dec_btn.add_css_class("transport-btn");
+        bpm_display.append(&bpm_dec_btn);
+
+        let bpm_label = Label::new(Some(&format!("{:.1} BPM", initial_bpm)));
         bpm_label.add_css_class("lcd-bpm");
         bpm_display.append(&bpm_label);
+
+        let bpm_inc_btn = Button::with_label("+");
+        bpm_inc_btn.add_css_class("transport-btn");
+        bpm_display.append(&bpm_inc_btn);
+
+        let tx_bpm_dec = tx.clone();
+        let bpm_val_dec = current_bpm.clone();
+        let lbl_dec = bpm_label.clone();
+        bpm_dec_btn.connect_clicked(move |_| {
+            let mut b = bpm_val_dec.borrow_mut();
+            *b = (*b - 1.0).max(20.0);
+            lbl_dec.set_text(&format!("{:.1} BPM", *b));
+            let _ = tx_bpm_dec.send(UiToAudioMsg::SetBpm(*b));
+        });
+
+        let tx_bpm_inc = tx.clone();
+        let bpm_val_inc = current_bpm.clone();
+        let lbl_inc = bpm_label.clone();
+        bpm_inc_btn.connect_clicked(move |_| {
+            let mut b = bpm_val_inc.borrow_mut();
+            *b = (*b + 1.0).min(999.0);
+            lbl_inc.set_text(&format!("{:.1} BPM", *b));
+            let _ = tx_bpm_inc.send(UiToAudioMsg::SetBpm(*b));
+        });
 
         let time_display = Box::new(Orientation::Horizontal, 4);
         time_display.add_css_class("lcd-display");

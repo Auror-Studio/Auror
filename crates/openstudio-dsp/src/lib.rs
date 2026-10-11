@@ -332,6 +332,7 @@ impl Fruity3xOsc {
 /// Soundgoodizer: O lendário maximizer/saturador de 1 botão do FL Studio!
 #[derive(Debug, Clone)]
 pub struct Soundgoodizer {
+    pub enabled: bool,
     pub mode: u8, // 0 = A, 1 = B, 2 = C, 3 = D
     pub amount: f32, // 0.0 .. 1.0
 }
@@ -339,6 +340,7 @@ pub struct Soundgoodizer {
 impl Default for Soundgoodizer {
     fn default() -> Self {
         Self {
+            enabled: false, // Bypassado por padrão para som limpo de estúdio
             mode: 0,
             amount: 0.5,
         }
@@ -348,7 +350,7 @@ impl Default for Soundgoodizer {
 impl Soundgoodizer {
     #[inline]
     pub fn process_stereo(&self, left: f32, right: f32) -> (f32, f32) {
-        if self.amount <= 0.001 {
+        if !self.enabled || self.amount <= 0.001 {
             return (left, right);
         }
 
@@ -418,24 +420,26 @@ impl ParametricEQ2 {
 /// Fruity Delay 3 equivalente: Delay estéreo sincronizado ao BPM
 #[derive(Debug, Clone)]
 pub struct FruityDelay {
+    pub enabled: bool,
     buffer_l: Vec<f32>,
     buffer_r: Vec<f32>,
     write_pos: usize,
     pub delay_time_sec: f32,
     pub feedback: f32, // 0.0 .. 0.95
-    pub wet: f32,      // 0.0 .. 1.0
+    pub wet: f32,      // 0.0 .. 1.0 (0.0 = 100% seco/dry por padrão!)
 }
 
 impl Default for FruityDelay {
     fn default() -> Self {
         let max_samples = 44100 * 2; // até 2 segundos de delay
         Self {
+            enabled: false, // Bypassado por padrão para som 100% seco e punchy
             buffer_l: vec![0.0; max_samples],
             buffer_r: vec![0.0; max_samples],
             write_pos: 0,
             delay_time_sec: 0.35, // ~1/4 batida em 130 BPM
             feedback: 0.45,
-            wet: 0.35,
+            wet: 0.0, // Zero reverb/delay por padrão
         }
     }
 }
@@ -443,6 +447,10 @@ impl Default for FruityDelay {
 impl FruityDelay {
     #[inline]
     pub fn process_stereo(&mut self, sample_rate: f32, in_l: f32, in_r: f32) -> (f32, f32) {
+        if !self.enabled || self.wet <= 0.001 {
+            return (in_l, in_r);
+        }
+
         let delay_samples = ((self.delay_time_sec * sample_rate) as usize).clamp(1, self.buffer_l.len() - 1);
         let read_pos = (self.write_pos + self.buffer_l.len() - delay_samples) % self.buffer_l.len();
 
@@ -705,5 +713,15 @@ mod tests {
         assert!(l != 0.0 && r != 0.0);
         synth.note_off(60);
         synth.note_off(64);
+    }
+
+    #[test]
+    fn test_fruity_delay_dry_by_default() {
+        let mut delay = FruityDelay::default();
+        assert_eq!(delay.wet, 0.0);
+        assert!(!delay.enabled);
+        let (out_l, out_r) = delay.process_stereo(44100.0, 0.75, 0.75);
+        assert_eq!(out_l, 0.75);
+        assert_eq!(out_r, 0.75);
     }
 }

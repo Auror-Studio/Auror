@@ -50,6 +50,7 @@ pub struct AudioEngine {
     eq2: ParametricEQ2,
     delay: FruityDelay,
     frame_counter: usize,
+    swing: f32,
 }
 
 impl AudioEngine {
@@ -70,6 +71,7 @@ impl AudioEngine {
             eq2: ParametricEQ2::default(),
             delay: FruityDelay::default(),
             frame_counter: 0,
+            swing: 0.0,
         }
     }
 
@@ -138,6 +140,9 @@ impl AudioEngine {
                     pattern.piano_roll_notes.insert(channel_id, notes);
                 }
             }
+            UiToAudioMsg::UpdatePlaylistClips(clips) => {
+                self.project.playlist_clips = clips;
+            }
             UiToAudioMsg::SetChannelParam {
                 channel_id,
                 param_type,
@@ -175,6 +180,45 @@ impl AudioEngine {
                     }
                 }
             }
+            UiToAudioMsg::SetMixerSlotBypass {
+                track_id,
+                slot_index,
+                enabled,
+            } => {
+                if track_id == 0 {
+                    if slot_index == 0 {
+                        self.soundgoodizer.enabled = enabled;
+                    } else if slot_index == 2 {
+                        self.delay.enabled = enabled;
+                    }
+                }
+                if let Some(track) = self.project.mixer_tracks.iter_mut().find(|t| t.index == track_id) {
+                    if let Some(slot) = track.slots.get_mut(slot_index) {
+                        slot.enabled = enabled;
+                    }
+                }
+            }
+            UiToAudioMsg::SetMixerSlotWet {
+                track_id,
+                slot_index,
+                wet,
+            } => {
+                if track_id == 0 {
+                    if slot_index == 0 {
+                        self.soundgoodizer.amount = wet;
+                    } else if slot_index == 2 {
+                        self.delay.wet = wet;
+                    }
+                }
+                if let Some(track) = self.project.mixer_tracks.iter_mut().find(|t| t.index == track_id) {
+                    if let Some(slot) = track.slots.get_mut(slot_index) {
+                        slot.wet_mix = wet;
+                    }
+                }
+            }
+            UiToAudioMsg::SetSwing(swing) => {
+                self.swing = swing.clamp(0.0, 1.0);
+            }
             UiToAudioMsg::SetActivePattern(pat_id) => {
                 self.project.active_pattern = pat_id;
             }
@@ -206,6 +250,7 @@ impl AudioEngine {
 
         let mut master_peak_l = 0.0_f32;
         let mut master_peak_r = 0.0_f32;
+        let mut ch_peaks = [0.0_f32; 5]; // 0: Kick, 1: Clap, 2: Hat, 3: Snare, 4: Synth
 
         for frame_idx in 0..num_frames {
             // Avança o relógio de transporte se estiver tocando
@@ -215,14 +260,24 @@ impl AudioEngine {
                 while self.tick_accumulator >= 1.0 {
                     self.tick_accumulator -= 1.0;
                     self.current_tick += 1;
-                    self.trigger_piano_roll_notes_at_tick(self.current_tick);
+
+                    match self.project.playback_mode {
+                        openstudio_core::PlaybackMode::Pattern => {
+                            self.trigger_piano_roll_notes_at_tick(self.current_tick);
+                        }
+                        openstudio_core::PlaybackMode::Song => {
+                            self.trigger_song_mode_clips_at_tick(self.current_tick);
+                        }
+                    }
                 }
 
                 // Cálculo do step atual no Pattern mode (16 passos de 24 ticks cada)
                 let current_step = ((self.current_tick / TICKS_PER_STEP) % 16) as usize;
                 if current_step != prev_step {
                     self.current_step = current_step;
-                    self.trigger_step_sequencer_notes(current_step);
+                    if self.project.playback_mode == openstudio_core::PlaybackMode::Pattern {
+                        self.trigger_step_sequencer_notes(current_step);
+                    }
                     let _ = audio_to_ui_tx.try_send(AudioToUiMsg::CurrentStep(current_step));
                 }
             }
@@ -234,6 +289,12 @@ impl AudioEngine {
             let (s_l, s_r) = self.snare.next_sample(self.sample_rate);
             let (p_l, p_r) = self.poly_synth.next_sample(self.sample_rate);
 
+            ch_peaks[0] = ch_peaks[0].max(k_l.abs().max(k_r.abs()));
+            ch_peaks[1] = ch_peaks[1].max(c_l.abs().max(c_r.abs()));
+            ch_peaks[2] = ch_peaks[2].max(h_l.abs().max(h_r.abs()));
+            ch_peaks[3] = ch_peaks[3].max(s_l.abs().max(s_r.abs()));
+            ch_peaks[4] = ch_peaks[4].max(p_l.abs().max(p_r.abs()));
+
             let ch0_vol = self.project.channels.get(0).map(|c| c.volume).unwrap_or(0.85);
             let ch1_vol = self.project.channels.get(1).map(|c| c.volume).unwrap_or(0.85);
             let ch2_vol = self.project.channels.get(2).map(|c| c.volume).unwrap_or(0.85);
@@ -243,7 +304,7 @@ impl AudioEngine {
             let mixed_l = k_l * ch0_vol + c_l * ch1_vol + h_l * ch2_vol + s_l * ch3_vol + p_l * ch4_vol;
             let mixed_r = k_r * ch0_vol + c_r * ch1_vol + h_r * ch2_vol + s_r * ch3_vol + p_r * ch4_vol;
 
-            // Aplica plugins do Master (Soundgoodizer + Delay + EQ2)
+            // Aplica plugins do Master (Soundgoodizer + Delay + EQ2) - 100% DRY por padrão!
             let (sg_l, sg_r) = self.soundgoodizer.process_stereo(mixed_l, mixed_r);
             let (dl_l, dl_r) = self.delay.process_stereo(self.sample_rate, sg_l, sg_r);
             let eq_l = self.eq2.process_sample(dl_l);
@@ -270,9 +331,13 @@ impl AudioEngine {
             let _ = audio_to_ui_tx.try_send(AudioToUiMsg::IsPlaying(
                 self.transport_state == TransportState::Playing,
             ));
-            let _ = audio_to_ui_tx.try_send(AudioToUiMsg::MixerMeters(vec![
-                (0, master_peak_l, master_peak_r),
-            ]));
+
+            // Telemetria de pico para Master (0) e Inserts 1 a 5
+            let mut meters = vec![(0, master_peak_l, master_peak_r)];
+            for i in 0..5 {
+                meters.push((i + 1, ch_peaks[i], ch_peaks[i]));
+            }
+            let _ = audio_to_ui_tx.try_send(AudioToUiMsg::MixerMeters(meters));
         }
     }
 
@@ -320,6 +385,69 @@ impl AudioEngine {
                     if (note.start_tick + note.duration_ticks) == rel_tick {
                         if *ch_id >= 4 {
                             self.poly_synth.note_off(note.pitch);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Dispara patterns e clipes de áudio organizados ao longo da timeline da Playlist no modo SONG
+    fn trigger_song_mode_clips_at_tick(&mut self, tick: u64) {
+        for clip in &self.project.playlist_clips {
+            if clip.muted {
+                continue;
+            }
+            if tick >= clip.start_tick && tick < (clip.start_tick + clip.length_ticks) {
+                if let openstudio_core::ClipPayload::Pattern(pat_id) = clip.payload {
+                    if let Some(pattern) = self.project.patterns.iter().find(|p| p.id == pat_id) {
+                        let pat_len_ticks = (pattern.length_steps as u64) * TICKS_PER_STEP;
+                        if pat_len_ticks == 0 {
+                            continue;
+                        }
+                        let rel_tick = (tick - clip.start_tick) % pat_len_ticks;
+
+                        // 1. Disparo de passos do sequenciador na batida
+                        if rel_tick % TICKS_PER_STEP == 0 {
+                            let step_idx = (rel_tick / TICKS_PER_STEP) as usize;
+                            for (ch_idx, steps) in &pattern.step_data {
+                                if let Some(step) = steps.get(step_idx) {
+                                    if step.active {
+                                        let vel = step.velocity;
+                                        match *ch_idx {
+                                            0 => self.kick.trigger(vel),
+                                            1 => self.clap.trigger(vel),
+                                            2 => self.hat.trigger(vel),
+                                            3 => self.snare.trigger(vel),
+                                            _ => self.poly_synth.note_on(60),
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2. Disparo de notas do Piano Roll
+                        for (ch_id, notes) in &pattern.piano_roll_notes {
+                            for note in notes {
+                                if note.muted {
+                                    continue;
+                                }
+                                if note.start_tick == rel_tick {
+                                    let vel = note.velocity;
+                                    match *ch_id {
+                                        0 => self.kick.trigger(vel),
+                                        1 => self.clap.trigger(vel),
+                                        2 => self.hat.trigger(vel),
+                                        3 => self.snare.trigger(vel),
+                                        _ => self.poly_synth.note_on(note.pitch),
+                                    }
+                                }
+                                if (note.start_tick + note.duration_ticks) == rel_tick {
+                                    if *ch_id >= 4 {
+                                        self.poly_synth.note_off(note.pitch);
+                                    }
+                                }
+                            }
                         }
                     }
                 }

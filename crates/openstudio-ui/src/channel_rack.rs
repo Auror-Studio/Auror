@@ -9,6 +9,7 @@ pub struct ChannelRackWidget {
     pub container: Box,
     pub step_buttons: Vec<Vec<ToggleButton>>,
     pub current_playhead: Rc<RefCell<usize>>,
+    pub on_open_piano_roll: Rc<RefCell<Option<Rc<dyn Fn(usize)>>>>,
 }
 
 impl ChannelRackWidget {
@@ -19,11 +20,13 @@ impl ChannelRackWidget {
         let container = Box::new(Orientation::Vertical, 4);
         container.add_css_class("channel-rack-box");
 
+        let on_open_piano_roll = Rc::new(RefCell::new(None::<Rc<dyn Fn(usize)>>));
+
         // Cabeçalho do Channel Rack
         let header = Box::new(Orientation::Horizontal, 8);
         header.add_css_class("channel-rack-header");
 
-        let title_label = Label::new(Some("Channel Rack"));
+        let title_label = Label::new(Some("🥁 Channel Rack"));
         title_label.add_css_class("lcd-bpm");
         header.append(&title_label);
 
@@ -31,9 +34,23 @@ impl ChannelRackWidget {
         pattern_label.add_css_class("lcd-display");
         header.append(&pattern_label);
 
-        let swing_label = Label::new(Some("Swing: 0%"));
-        swing_label.add_css_class("lcd-display");
-        header.append(&swing_label);
+        // Controle Interativo de Swing (Balanço do FL Studio)
+        let swing_box = Box::new(Orientation::Horizontal, 4);
+        swing_box.add_css_class("lcd-display");
+        let swing_title = Label::new(Some("Swing:"));
+        swing_title.add_css_class("lcd-bpm");
+        swing_box.append(&swing_title);
+
+        let swing_scale = Scale::with_range(Orientation::Horizontal, 0.0, 1.0, 0.05);
+        swing_scale.set_value(0.0);
+        swing_scale.set_size_request(60, -1);
+        swing_scale.set_draw_value(false);
+        let tx_swing = tx.clone();
+        swing_scale.connect_value_changed(move |s| {
+            let _ = tx_swing.send(UiToAudioMsg::SetSwing(s.value() as f32));
+        });
+        swing_box.append(&swing_scale);
+        header.append(&swing_box);
 
         container.append(&header);
 
@@ -97,6 +114,17 @@ impl ChannelRackWidget {
                 });
             });
             row.append(&name_btn);
+
+            // Botão de Atalho para Piano Roll deste canal (🎹)
+            let pr_jump_btn = Button::with_label("🎹");
+            pr_jump_btn.add_css_class("transport-btn");
+            let cb_ref = on_open_piano_roll.clone();
+            pr_jump_btn.connect_clicked(move |_| {
+                if let Some(ref cb) = *cb_ref.borrow() {
+                    cb(ch_id);
+                }
+            });
+            row.append(&pr_jump_btn);
 
             // Badge com número da rota do Mixer
             let trk_badge = Label::new(Some(&format!("{:>2}", channel.target_mixer_track)));
@@ -167,6 +195,7 @@ impl ChannelRackWidget {
             container,
             step_buttons,
             current_playhead,
+            on_open_piano_roll,
         }
     }
 
