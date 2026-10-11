@@ -74,21 +74,38 @@ button.transport-btn.record-btn.active {
     box-shadow: 0 0 10px rgba(255, 71, 87, 0.7);
 }
 
-/* Alternador SONG / PAT */
+/* Alternador SONG / PAT Estilo FL Studio */
+.mode-switch {
+    margin-left: 4px;
+    margin-right: 6px;
+}
+
 .mode-switch button {
-    background-color: #1b1e23;
-    color: #718093;
+    background-color: #1a1e24;
+    color: #8395a7;
     border: 1px solid #2d343e;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 900;
-    padding: 3px 8px;
+    padding: 4px 10px;
+    min-width: 44px;
+}
+
+.mode-switch button:first-child {
+    border-top-left-radius: 4px;
+    border-bottom-left-radius: 4px;
+}
+
+.mode-switch button:last-child {
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+    border-left: none;
 }
 
 .mode-switch button.active {
     background-color: #ff851b;
     color: #111315;
     border-color: #ffa502;
-    box-shadow: 0 0 8px rgba(255, 133, 27, 0.6);
+    box-shadow: 0 0 10px rgba(255, 133, 27, 0.7);
 }
 
 /* Badge de Hardware / GPU */

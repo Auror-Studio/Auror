@@ -10,6 +10,8 @@ pub struct ShortcutContext {
     pub is_playing: Rc<RefCell<bool>>,
     pub playback_mode: Rc<RefCell<PlaybackMode>>,
     pub tx: Sender<UiToAudioMsg>,
+    pub on_toggle_play: Rc<dyn Fn()>,
+    pub on_toggle_mode: Rc<dyn Fn()>,
     pub on_toggle_playlist: Rc<dyn Fn()>,
     pub on_toggle_channel_rack: Rc<dyn Fn()>,
     pub on_toggle_piano_roll: Rc<dyn Fn()>,
@@ -21,9 +23,9 @@ pub struct ShortcutContext {
 pub fn install_fl_shortcuts(window: &impl IsA<gtk4::Widget>, ctx: ShortcutContext) {
     let controller = EventControllerKey::new();
 
-    let is_playing = ctx.is_playing;
-    let playback_mode = ctx.playback_mode;
     let tx = ctx.tx;
+    let on_play = ctx.on_toggle_play;
+    let on_mode = ctx.on_toggle_mode;
     let on_playlist = ctx.on_toggle_playlist;
     let on_channel_rack = ctx.on_toggle_channel_rack;
     let on_piano_roll = ctx.on_toggle_piano_roll;
@@ -38,26 +40,13 @@ pub fn install_fl_shortcuts(window: &impl IsA<gtk4::Widget>, ctx: ShortcutContex
         match key {
             // Space: Play / Stop clássico do FL Studio
             Key::space => {
-                let mut playing = is_playing.borrow_mut();
-                if *playing {
-                    *playing = false;
-                    let _ = tx.send(UiToAudioMsg::Stop);
-                } else {
-                    *playing = true;
-                    let _ = tx.send(UiToAudioMsg::Play);
-                }
+                on_play();
                 return glib::Propagation::Stop;
             }
 
             // L: Alternar modo Song / Pattern (ícone e comportamento lendário do FL Studio)
             Key::L | Key::l if !is_ctrl && !is_alt => {
-                let mut mode = playback_mode.borrow_mut();
-                let new_mode = match *mode {
-                    PlaybackMode::Pattern => PlaybackMode::Song,
-                    PlaybackMode::Song => PlaybackMode::Pattern,
-                };
-                *mode = new_mode;
-                let _ = tx.send(UiToAudioMsg::SetPlaybackMode(new_mode));
+                on_mode();
                 return glib::Propagation::Stop;
             }
 

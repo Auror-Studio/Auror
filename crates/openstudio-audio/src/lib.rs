@@ -85,6 +85,11 @@ impl AudioEngine {
                 self.current_tick = 0;
                 self.tick_accumulator = 0.0;
                 self.current_step = 0;
+                self.poly_synth.all_notes_off();
+                self.kick.silence();
+                self.clap.silence();
+                self.hat.silence();
+                self.snare.silence();
             }
             UiToAudioMsg::Record => {
                 self.transport_state = TransportState::Recording;
@@ -94,10 +99,20 @@ impl AudioEngine {
             }
             UiToAudioMsg::SetPlaybackMode(mode) => {
                 self.project.playback_mode = mode;
+                self.poly_synth.all_notes_off();
+                self.kick.silence();
+                self.clap.silence();
+                self.hat.silence();
+                self.snare.silence();
             }
             UiToAudioMsg::SeekTick(tick) => {
                 self.current_tick = tick;
                 self.current_step = ((tick / TICKS_PER_STEP) % 16) as usize;
+                self.poly_synth.all_notes_off();
+                self.kick.silence();
+                self.clap.silence();
+                self.hat.silence();
+                self.snare.silence();
             }
             UiToAudioMsg::TriggerNoteOn {
                 channel_id,
@@ -266,6 +281,20 @@ impl AudioEngine {
                             self.trigger_piano_roll_notes_at_tick(self.current_tick);
                         }
                         openstudio_core::PlaybackMode::Song => {
+                            let song_end_tick = self.project.playlist_clips.iter()
+                                .filter(|c| !c.muted)
+                                .map(|c| c.start_tick + c.length_ticks)
+                                .max()
+                                .unwrap_or(TICKS_PER_STEP * 16 * 4);
+
+                            if self.current_tick >= song_end_tick {
+                                self.current_tick = 0;
+                                self.poly_synth.all_notes_off();
+                                self.kick.silence();
+                                self.clap.silence();
+                                self.hat.silence();
+                                self.snare.silence();
+                            }
                             self.trigger_song_mode_clips_at_tick(self.current_tick);
                         }
                     }
@@ -372,6 +401,12 @@ impl AudioEngine {
                     if note.muted {
                         continue;
                     }
+                    let end_tick = note.start_tick + note.duration_ticks;
+                    if end_tick == rel_tick || (end_tick >= pat_len_ticks && rel_tick == 0) {
+                        if *ch_id >= 4 {
+                            self.poly_synth.note_off(note.pitch);
+                        }
+                    }
                     if note.start_tick == rel_tick {
                         let vel = note.velocity;
                         match *ch_id {
@@ -382,11 +417,6 @@ impl AudioEngine {
                             _ => self.poly_synth.note_on(note.pitch),
                         }
                     }
-                    if (note.start_tick + note.duration_ticks) == rel_tick {
-                        if *ch_id >= 4 {
-                            self.poly_synth.note_off(note.pitch);
-                        }
-                    }
                 }
             }
         }
@@ -394,10 +424,30 @@ impl AudioEngine {
 
     /// Dispara patterns e clipes de áudio organizados ao longo da timeline da Playlist no modo SONG
     fn trigger_song_mode_clips_at_tick(&mut self, tick: u64) {
+        let mut triggered_step_patterns = Vec::new();
+
         for clip in &self.project.playlist_clips {
             if clip.muted {
                 continue;
             }
+
+            // 1. Quando o clipe atinge exatamente o final de sua duração, desliga todas as notas ativas do synth disparadas por ele
+            if tick == (clip.start_tick + clip.length_ticks) {
+                if let openstudio_core::ClipPayload::Pattern(pat_id) = clip.payload {
+                    if let Some(pattern) = self.project.patterns.iter().find(|p| p.id == pat_id) {
+                        for (ch_id, notes) in &pattern.piano_roll_notes {
+                            if *ch_id >= 4 {
+                                for note in notes {
+                                    self.poly_synth.note_off(note.pitch);
+                                }
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+
+            // 2. Processa o clipe se o tick atual estiver estritamente dentro de seus limites [start_tick, start_tick + length_ticks)
             if tick >= clip.start_tick && tick < (clip.start_tick + clip.length_ticks) {
                 if let openstudio_core::ClipPayload::Pattern(pat_id) = clip.payload {
                     if let Some(pattern) = self.project.patterns.iter().find(|p| p.id == pat_id) {
@@ -407,8 +457,9 @@ impl AudioEngine {
                         }
                         let rel_tick = (tick - clip.start_tick) % pat_len_ticks;
 
-                        // 1. Disparo de passos do sequenciador na batida
-                        if rel_tick % TICKS_PER_STEP == 0 {
+                        // Disparo de passos do sequenciador (deduplicado para evitar flams/duplicação se o mesmo pattern estiver empilhado)
+                        if rel_tick % TICKS_PER_STEP == 0 && !triggered_step_patterns.contains(&pat_id) {
+                            triggered_step_patterns.push(pat_id);
                             let step_idx = (rel_tick / TICKS_PER_STEP) as usize;
                             for (ch_idx, steps) in &pattern.step_data {
                                 if let Some(step) = steps.get(step_idx) {
@@ -426,11 +477,17 @@ impl AudioEngine {
                             }
                         }
 
-                        // 2. Disparo de notas do Piano Roll
+                        // Disparo e corte de notas do Piano Roll
                         for (ch_id, notes) in &pattern.piano_roll_notes {
                             for note in notes {
                                 if note.muted {
                                     continue;
+                                }
+                                let end_tick = note.start_tick + note.duration_ticks;
+                                if end_tick == rel_tick || (end_tick >= pat_len_ticks && rel_tick == 0) {
+                                    if *ch_id >= 4 {
+                                        self.poly_synth.note_off(note.pitch);
+                                    }
                                 }
                                 if note.start_tick == rel_tick {
                                     let vel = note.velocity;
@@ -440,11 +497,6 @@ impl AudioEngine {
                                         2 => self.hat.trigger(vel),
                                         3 => self.snare.trigger(vel),
                                         _ => self.poly_synth.note_on(note.pitch),
-                                    }
-                                }
-                                if (note.start_tick + note.duration_ticks) == rel_tick {
-                                    if *ch_id >= 4 {
-                                        self.poly_synth.note_off(note.pitch);
                                     }
                                 }
                             }

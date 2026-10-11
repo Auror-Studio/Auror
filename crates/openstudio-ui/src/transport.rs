@@ -3,7 +3,10 @@ use gtk4::{Box, Button, Label, Orientation, ToggleButton};
 use openstudio_core::{PlaybackMode, UiToAudioMsg};
 use openstudio_gpu::GpuDeviceInfo;
 use crossbeam_channel::Sender;
+use std::rc::Rc;
+use std::cell::RefCell;
 
+#[derive(Clone)]
 pub struct TransportBar {
     pub container: Box,
     pub play_btn: ToggleButton,
@@ -27,6 +30,7 @@ impl TransportBar {
         tx: Sender<UiToAudioMsg>,
         gpu_info: &GpuDeviceInfo,
         initial_bpm: f32,
+        mode_state: Rc<RefCell<PlaybackMode>>,
     ) -> Self {
         let container = Box::new(Orientation::Horizontal, 8);
         container.add_css_class("transport-bar");
@@ -43,7 +47,9 @@ impl TransportBar {
         let tx_pat = tx.clone();
         let pat_clone = pat_mode_btn.clone();
         let song_clone = song_mode_btn.clone();
+        let mode_state_pat = mode_state.clone();
         pat_mode_btn.connect_clicked(move |_| {
+            *mode_state_pat.borrow_mut() = PlaybackMode::Pattern;
             pat_clone.add_css_class("active");
             song_clone.remove_css_class("active");
             let _ = tx_pat.send(UiToAudioMsg::SetPlaybackMode(PlaybackMode::Pattern));
@@ -52,7 +58,9 @@ impl TransportBar {
         let tx_song = tx.clone();
         let pat_clone2 = pat_mode_btn.clone();
         let song_clone2 = song_mode_btn.clone();
+        let mode_state_song = mode_state.clone();
         song_mode_btn.connect_clicked(move |_| {
+            *mode_state_song.borrow_mut() = PlaybackMode::Song;
             song_clone2.add_css_class("active");
             pat_clone2.remove_css_class("active");
             let _ = tx_song.send(UiToAudioMsg::SetPlaybackMode(PlaybackMode::Song));
@@ -206,6 +214,25 @@ impl TransportBar {
             f7_btn,
             f9_btn,
             gpu_btn,
+        }
+    }
+
+    pub fn set_playback_mode(&self, mode: PlaybackMode) {
+        match mode {
+            PlaybackMode::Pattern => {
+                self.pat_mode_btn.add_css_class("active");
+                self.song_mode_btn.remove_css_class("active");
+            }
+            PlaybackMode::Song => {
+                self.song_mode_btn.add_css_class("active");
+                self.pat_mode_btn.remove_css_class("active");
+            }
+        }
+    }
+
+    pub fn set_playing(&self, playing: bool) {
+        if self.play_btn.is_active() != playing {
+            self.play_btn.set_active(playing);
         }
     }
 }

@@ -5,7 +5,7 @@ use gtk4::{
     StackTransitionType,
 };
 use openstudio_audio::{start_audio_engine, AudioEngineHandle};
-use openstudio_core::{AudioToUiMsg, PlaybackMode, Project, TICKS_PER_STEP};
+use openstudio_core::{AudioToUiMsg, PlaybackMode, Project, TICKS_PER_STEP, UiToAudioMsg};
 use openstudio_gpu::{detect_primary_gpu, GpuDeviceInfo};
 use openstudio_plugins::PluginDatabase;
 
@@ -110,8 +110,10 @@ fn build_ui(
     let root_v_box = Box::new(Orientation::Vertical, 0);
 
     // 2. Barra de Transporte Superior
+    let is_playing = Rc::new(RefCell::new(false));
+    let playback_mode = Rc::new(RefCell::new(PlaybackMode::Pattern));
     let initial_bpm = project.borrow().tempo;
-    let transport = TransportBar::new(tx.clone(), gpu_info, initial_bpm);
+    let transport = TransportBar::new(tx.clone(), gpu_info, initial_bpm, playback_mode.clone());
     root_v_box.append(&transport.container);
 
     // 3. Área Central de Trabalho (Navegador na Esquerda + Stack Modular estilo FL Studio)
@@ -157,6 +159,9 @@ fn build_ui(
         let f6 = f6_btn.clone();
         let f7 = f7_btn.clone();
         let f9 = f9_btn.clone();
+        let transport_ref = transport.clone();
+        let tx_view = tx.clone();
+        let mode_view = playback_mode.clone();
 
         Rc::new(move |view_name: &str| {
             stack.set_visible_child_name(view_name);
@@ -164,6 +169,17 @@ fn build_ui(
             f6.set_active(view_name == "channel_rack");
             f7.set_active(view_name == "piano_roll");
             f9.set_active(view_name == "mixer");
+
+            // Auto-seleção inteligente de modo: F5 -> SONG, F6/F7 -> PATTERN
+            if view_name == "playlist" {
+                *mode_view.borrow_mut() = PlaybackMode::Song;
+                transport_ref.set_playback_mode(PlaybackMode::Song);
+                let _ = tx_view.send(UiToAudioMsg::SetPlaybackMode(PlaybackMode::Song));
+            } else if view_name == "channel_rack" || view_name == "piano_roll" {
+                *mode_view.borrow_mut() = PlaybackMode::Pattern;
+                transport_ref.set_playback_mode(PlaybackMode::Pattern);
+                let _ = tx_view.send(UiToAudioMsg::SetPlaybackMode(PlaybackMode::Pattern));
+            }
         })
     };
 
@@ -195,9 +211,6 @@ fn build_ui(
     });
 
     // 5. Instalação dos Atalhos Globais 100% FL Studio
-    let is_playing = Rc::new(RefCell::new(false));
-    let playback_mode = Rc::new(RefCell::new(PlaybackMode::Pattern));
-
     let sw_short_f5 = switch_to_view.clone();
     let sw_short_f6 = switch_to_view.clone();
     let sw_short_f7 = switch_to_view.clone();
@@ -205,10 +218,31 @@ fn build_ui(
     let browser_box = browser.container.clone();
     let pr_ghost = piano_roll.clone();
 
+    let play_btn_ref = transport.play_btn.clone();
+    let on_toggle_play = Rc::new(move || {
+        let current = play_btn_ref.is_active();
+        play_btn_ref.set_active(!current);
+    });
+
+    let transport_mode_ref = transport.clone();
+    let mode_toggle_ref = playback_mode.clone();
+    let tx_toggle_mode = tx.clone();
+    let on_toggle_mode = Rc::new(move || {
+        let new_mode = match *mode_toggle_ref.borrow() {
+            PlaybackMode::Pattern => PlaybackMode::Song,
+            PlaybackMode::Song => PlaybackMode::Pattern,
+        };
+        *mode_toggle_ref.borrow_mut() = new_mode;
+        transport_mode_ref.set_playback_mode(new_mode);
+        let _ = tx_toggle_mode.send(UiToAudioMsg::SetPlaybackMode(new_mode));
+    });
+
     let shortcut_ctx = ShortcutContext {
         is_playing: is_playing.clone(),
         playback_mode: playback_mode.clone(),
         tx: tx.clone(),
+        on_toggle_play,
+        on_toggle_mode,
         on_toggle_playlist: Rc::new(move || sw_short_f5("playlist")),
         on_toggle_channel_rack: Rc::new(move || sw_short_f6("channel_rack")),
         on_toggle_piano_roll: Rc::new(move || sw_short_f7("piano_roll")),

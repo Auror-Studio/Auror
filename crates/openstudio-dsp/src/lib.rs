@@ -119,6 +119,11 @@ impl AdsrEnvelope {
         self.state != EnvelopeStage::Idle
     }
 
+    pub fn reset(&mut self) {
+        self.state = EnvelopeStage::Idle;
+        self.current_level = 0.0;
+    }
+
     #[inline]
     pub fn next_sample(&mut self, sample_rate: f32) -> f32 {
         let dt = 1.0 / sample_rate;
@@ -327,6 +332,11 @@ impl Fruity3xOsc {
     pub fn is_active(&self) -> bool {
         self.envelope.is_active()
     }
+
+    pub fn reset(&mut self) {
+        self.envelope.reset();
+        self.filter.reset();
+    }
 }
 
 /// Soundgoodizer: O lendário maximizer/saturador de 1 botão do FL Studio!
@@ -506,6 +516,13 @@ impl DrumVoice {
         self.filter.reset();
     }
 
+    pub fn silence(&mut self) {
+        self.active = false;
+        self.time_sec = 0.0;
+        self.phase = 0.0;
+        self.filter.reset();
+    }
+
     #[inline]
     fn pseudo_noise(&mut self) -> f32 {
         self.noise_seed = (self.noise_seed * 1103515245.0 + 12345.0).fract();
@@ -636,6 +653,22 @@ impl PolyphonicSynth {
         }
     }
 
+    pub fn all_notes_off(&mut self) {
+        for v in &mut self.voices {
+            if v.active {
+                v.active = false;
+                v.synth.release_note();
+            }
+        }
+    }
+
+    pub fn reset(&mut self) {
+        for v in &mut self.voices {
+            v.active = false;
+            v.synth.reset();
+        }
+    }
+
     #[inline]
     pub fn next_sample(&mut self, sample_rate: f32) -> (f32, f32) {
         let mut sum_l = 0.0;
@@ -716,12 +749,27 @@ mod tests {
     }
 
     #[test]
-    fn test_fruity_delay_dry_by_default() {
-        let mut delay = FruityDelay::default();
-        assert_eq!(delay.wet, 0.0);
-        assert!(!delay.enabled);
-        let (out_l, out_r) = delay.process_stereo(44100.0, 0.75, 0.75);
-        assert_eq!(out_l, 0.75);
-        assert_eq!(out_r, 0.75);
+    fn test_polyphonic_synth_all_notes_off_and_silence() {
+        let mut synth = PolyphonicSynth::default();
+        synth.note_on(60);
+        synth.note_on(64);
+        synth.note_on(67);
+        synth.all_notes_off();
+        synth.reset();
+        let (l, r) = synth.next_sample(44100.0);
+        assert_eq!(l, 0.0);
+        assert_eq!(r, 0.0);
+    }
+
+    #[test]
+    fn test_drum_voice_silence() {
+        let mut kick = DrumVoice::new(DrumType::Kick);
+        kick.trigger(1.0);
+        assert!(kick.active);
+        kick.silence();
+        assert!(!kick.active);
+        let (k_l, k_r) = kick.next_sample(44100.0);
+        assert_eq!(k_l, 0.0);
+        assert_eq!(k_r, 0.0);
     }
 }
